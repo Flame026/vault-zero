@@ -1,11 +1,15 @@
 # Vault Zero
 
 <p align="center">
-  <img src="assets/branding/vault_zero_icon.png" width="170">
+  <img src="assets/branding/vault_zero_icon.png" width="170" alt="Vault Zero Logo">
 </p>
 
 <p align="center">
-Premium offline-first character manager for Android.
+<b>Offline by design. Fast by default.</b>
+</p>
+
+<p align="center">
+A premium offline-first character manager for Android.
 </p>
 
 ---
