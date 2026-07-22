@@ -1,17 +1,84 @@
-# character_collector
+# Vault Zero
 
-A new Flutter project.
+A modern, offline-first Android application for organizing and managing game characters.
 
-## Getting Started
+Built with Flutter using Material 3, Vault Zero provides a clean and fast experience for players who want a lightweight character database without relying on cloud services.
 
-This project is a starting point for a Flutter application.
+---
 
-A few resources to get you started if this is your first Flutter project:
+## Features
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+- Offline-first SQLite database
+- Create characters
+- Edit characters
+- Delete characters
+- Search characters instantly
+- Excel (.xlsx) export
+- Material 3 interface
+- Dark Mode
+- Multiple accent themes
+- Modern animations
+- Beautiful launcher icon and splash screen
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## Screenshots
+
+Screenshots can be found in the Screenshots folder.
+
+---
+
+## Download
+
+The latest release is available in:
+
+Releases/v1.0.0/
+
+APK:
+
+Vault-Zero-v1.0.0.apk
+
+---
+
+## Built With
+
+Flutter
+
+SQLite
+
+Material 3
+
+---
+
+## Philosophy
+
+Vault Zero follows a few simple principles.
+
+• Fast
+• Offline-first
+• Minimal
+• Beautiful
+• Easy to maintain
+
+---
+
+## Roadmap
+
+Upcoming features include:
+
+- Character images
+- Backup & Restore
+- Sorting options
+- Additional export formats
+
+---
+
+## License
+
+MIT License
+
+---
+
+## Author
+
+Developed by Flame26.
