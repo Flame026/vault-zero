@@ -20,17 +20,17 @@ A premium offline-first character manager for Android.
 
 | Light | Dark |
 |-------|------|
-| *(image)* | *(image)* |
+| ![](screenshots/home/light.jpg) | ![](screenshots/home/dark.jpg) |
 
 ### Themes
 
 | Purple | Blue |
 |---------|------|
-| *(image)* | *(image)* |
+| ![](screenshots/themes/purple.jpg) | ![](screenshots/themes/blue.jpg) |
 
 | Green | Orange | Pink |
 |--------|--------|------|
-| *(image)* | *(image)* | *(image)* |
+| ![](screenshots/themes/green.jpg) | ![](screenshots/themes/orange.jpg) | ![](screenshots/themes/pink.jpg) |
 
 ---
 
