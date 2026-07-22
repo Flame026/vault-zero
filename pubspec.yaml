@@ -1,0 +1,38 @@
+name: character_collector
+description: "Vault Zero — a premium offline character archive."
+publish_to: 'none'
+version: 0.8.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  sqflite: ^2.4.2
+  path: ^1.9.1
+  excel: ^4.0.6
+  path_provider: ^2.1.5
+  share_plus: ^10.1.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/branding/
+
+flutter_launcher_icons:
+  android: true
+  ios: false
+  image_path: "assets/branding/vault_zero_icon.png"
+  min_sdk_android: 21
+  adaptive_icon_background: "assets/branding/vault_zero_icon_background.png"
+  adaptive_icon_foreground: "assets/branding/vault_zero_icon_foreground.png"
+  adaptive_icon_foreground_inset: 0
+  adaptive_icon_monochrome: "assets/branding/vault_zero_icon_monochrome.png"
