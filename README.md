@@ -25,11 +25,11 @@ A premium offline-first character manager for Android.
 ### Themes
 
 | Purple | Blue |
-|---------|------|
+|--------|------|
 | ![](screenshots/themes/purple.jpg) | ![](screenshots/themes/blue.jpg) |
 
 | Green | Orange | Pink |
-|--------|--------|------|
+|-------|--------|------|
 | ![](screenshots/themes/green.jpg) | ![](screenshots/themes/orange.jpg) | ![](screenshots/themes/pink.jpg) |
 
 ---
