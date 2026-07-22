@@ -1,84 +1,144 @@
 # Vault Zero
 
-A modern, offline-first Android application for organizing and managing game characters.
+<p align="center">
+  <img src="assets/branding/vault_zero_icon.png" alt="Vault Zero Logo" width="160">
+</p>
 
-Built with Flutter using Material 3, Vault Zero provides a clean and fast experience for players who want a lightweight character database without relying on cloud services.
+<p align="center">
+A premium offline-first character manager built with Flutter.
+</p>
+
+<p align="center">
+Store, organize and manage your game characters with a modern Material 3 interface while keeping every piece of data entirely on your device.
+</p>
 
 ---
 
 ## Features
 
-- Offline-first SQLite database
-- Create characters
-- Edit characters
-- Delete characters
-- Search characters instantly
-- Excel (.xlsx) export
+- Offline-first
+- Local SQLite database
 - Material 3 interface
-- Dark Mode
+- Light & Dark mode
 - Multiple accent themes
-- Modern animations
-- Beautiful launcher icon and splash screen
+- Character search
+- Character editing
+- Excel export
+- Fast performance
+- No advertisements
+- No tracking
+- No account required
 
 ---
 
 ## Screenshots
 
-Screenshots can be found in the Screenshots folder.
+### Branding
+
+| Icon | Splash |
+|------|---------|
+| Coming Soon | Coming Soon |
+
+### Home
+
+| Light | Dark |
+|------|------|
+| Coming Soon | Coming Soon |
+
+### Themes
+
+- Purple
+- Blue
+- Green
+- Orange
+- Pink
 
 ---
 
 ## Download
 
-The latest release is available in:
+Latest release:
 
-Releases/v1.0.0/
+**Vault Zero v1.0.0**
 
-APK:
-
-Vault-Zero-v1.0.0.apk
+APK downloads are available from the GitHub Releases page.
 
 ---
 
-## Built With
+## Installation
 
-Flutter
-
-SQLite
-
-Material 3
+1. Download the latest APK.
+2. Enable installation from unknown sources if required.
+3. Install the APK.
+4. Launch Vault Zero.
 
 ---
 
-## Philosophy
+## Privacy
 
-Vault Zero follows a few simple principles.
+Vault Zero is completely offline.
 
-• Fast
-• Offline-first
-• Minimal
-• Beautiful
-• Easy to maintain
+- No internet connection required.
+- No advertisements.
+- No analytics.
+- No tracking.
+- No cloud storage.
+
+Your data always remains on your own device.
 
 ---
 
 ## Roadmap
 
-Upcoming features include:
+Future releases will focus on:
 
-- Character images
 - Backup & Restore
-- Sorting options
+- Improved search and filtering
 - Additional export formats
+- Theme refinements
+- User interface improvements
+- Performance optimizations
+- Quality of life enhancements
+
+---
+
+## Technology Stack
+
+| Component | Technology |
+|-----------|------------|
+| Framework | Flutter |
+| Language | Dart |
+| Database | SQLite |
+| UI | Material 3 |
+
+---
+
+## Repository
+
+```
+android/
+assets/
+ios/
+lib/
+linux/
+macos/
+test/
+web/
+windows/
+```
+
+---
+
+## Contributing
+
+Ideas, bug reports and feature suggestions are always welcome.
+
+Please open an Issue before submitting large changes.
 
 ---
 
 ## License
 
-MIT License
+Released under the MIT License.
 
----
-
-## Author
-
-Developed by Flame26.
+See the LICENSE file for details.
