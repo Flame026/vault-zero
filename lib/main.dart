@@ -1,45 +1,33 @@
 import 'dart:async';
-import 'dart:convert';
-import 'dart:io';
 
 import 'package:flutter/material.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'screens/character_entry_screen.dart';
+import 'core/theme/theme_provider.dart';
+import 'legacy/presentation/screens/character_entry_screen.dart';
 
 void main() {
-  runApp(const VaultZeroApp());
+  runApp(const ProviderScope(child: VaultZeroApp()));
 }
 
-class VaultZeroApp extends StatefulWidget {
+class VaultZeroApp extends ConsumerStatefulWidget {
   const VaultZeroApp({super.key});
 
   @override
-  State<VaultZeroApp> createState() => _VaultZeroAppState();
+  ConsumerState<VaultZeroApp> createState() => _VaultZeroAppState();
 }
 
-class _VaultZeroAppState extends State<VaultZeroApp> {
-  static const String _preferencesFileName =
-      'vault_zero_preferences.json';
-
-  static const String _legacyPreferencesFileName =
-      'character_collector_preferences.json';
-
+class _VaultZeroAppState extends ConsumerState<VaultZeroApp> {
   static const Duration _splashDuration = Duration(milliseconds: 1200);
 
-  ThemeMode _themeMode = ThemeMode.light;
-  ThemePreset _themePreset = ThemePreset.royalPurple;
   bool _showSplash = true;
   Timer? _splashTimer;
 
   @override
   void initState() {
     super.initState();
-    _loadPreferences();
-
     _splashTimer = Timer(_splashDuration, () {
       if (!mounted) return;
-
       setState(() {
         _showSplash = false;
       });
@@ -50,92 +38,6 @@ class _VaultZeroAppState extends State<VaultZeroApp> {
   void dispose() {
     _splashTimer?.cancel();
     super.dispose();
-  }
-
-  Future<File> _getPreferencesFile(String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
-
-    return File('${directory.path}/$fileName');
-  }
-
-  Future<void> _loadPreferences() async {
-    try {
-      final currentFile = await _getPreferencesFile(_preferencesFileName);
-      final legacyFile = await _getPreferencesFile(
-        _legacyPreferencesFileName,
-      );
-
-      final File sourceFile;
-
-      if (await currentFile.exists()) {
-        sourceFile = currentFile;
-      } else if (await legacyFile.exists()) {
-        sourceFile = legacyFile;
-      } else {
-        return;
-      }
-
-      final jsonText = await sourceFile.readAsString();
-      final data = jsonDecode(jsonText) as Map<String, dynamic>;
-
-      final savedThemeMode = data['themeMode'] == 'dark'
-          ? ThemeMode.dark
-          : ThemeMode.light;
-
-      final savedPresetName = data['themePreset'] as String?;
-
-      final savedPreset = ThemePreset.values.firstWhere(
-        (preset) => preset.name == savedPresetName,
-        orElse: () => ThemePreset.royalPurple,
-      );
-
-      if (!mounted) return;
-
-      setState(() {
-        _themeMode = savedThemeMode;
-        _themePreset = savedPreset;
-      });
-
-      if (sourceFile.path == legacyFile.path) {
-        await _savePreferences();
-      }
-    } catch (_) {
-      // Keep the default theme if the preferences file cannot be read.
-    }
-  }
-
-  Future<void> _savePreferences() async {
-    try {
-      final file = await _getPreferencesFile(_preferencesFileName);
-
-      final data = <String, String>{
-        'themeMode': _themeMode == ThemeMode.dark ? 'dark' : 'light',
-        'themePreset': _themePreset.name,
-      };
-
-      await file.writeAsString(
-        jsonEncode(data),
-        flush: true,
-      );
-    } catch (_) {
-      // Theme changes still work for the current session.
-    }
-  }
-
-  void _changeThemeMode(ThemeMode themeMode) {
-    setState(() {
-      _themeMode = themeMode;
-    });
-
-    _savePreferences();
-  }
-
-  void _changeThemePreset(ThemePreset themePreset) {
-    setState(() {
-      _themePreset = themePreset;
-    });
-
-    _savePreferences();
   }
 
   ThemeData _buildTheme({
@@ -151,9 +53,7 @@ class _VaultZeroAppState extends State<VaultZeroApp> {
 
     final scaffoldColor = Color.alphaBlend(
       seedColor.withAlpha(isDark ? 18 : 9),
-      isDark
-          ? const Color(0xFF121016)
-          : const Color(0xFFFBF9FE),
+      isDark ? const Color(0xFF121016) : const Color(0xFFFBF9FE),
     );
 
     return ThemeData(
@@ -175,58 +75,36 @@ class _VaultZeroAppState extends State<VaultZeroApp> {
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: colorScheme.surface,
-        contentPadding: const EdgeInsets.symmetric(
-          horizontal: 16,
-          vertical: 14,
-        ),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: colorScheme.outlineVariant,
-          ),
+          borderSide: BorderSide(color: colorScheme.outlineVariant),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: colorScheme.primary,
-            width: 2,
-          ),
+          borderSide: BorderSide(color: colorScheme.primary, width: 2),
         ),
       ),
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
           minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(16),
-          ),
-          textStyle: const TextStyle(
-            fontWeight: FontWeight.bold,
-          ),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          textStyle: const TextStyle(fontWeight: FontWeight.bold),
         ),
       ),
       snackBarTheme: SnackBarThemeData(
         behavior: SnackBarBehavior.floating,
         backgroundColor: colorScheme.inverseSurface,
-        contentTextStyle: TextStyle(
-          color: colorScheme.onInverseSurface,
-        ),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(14),
-        ),
+        contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
       ),
       bottomSheetTheme: BottomSheetThemeData(
         backgroundColor: colorScheme.surface,
@@ -237,33 +115,27 @@ class _VaultZeroAppState extends State<VaultZeroApp> {
 
   @override
   Widget build(BuildContext context) {
+    final themeState = ref.watch(themeProvider);
+
     return MaterialApp(
       title: 'Vault Zero',
       debugShowCheckedModeBanner: false,
-      themeMode: _themeMode,
+      themeMode: themeState.mode,
       theme: _buildTheme(
         brightness: Brightness.light,
-        seedColor: _themePreset.seedColor,
+        seedColor: themeState.preset.seedColor,
       ),
       darkTheme: _buildTheme(
         brightness: Brightness.dark,
-        seedColor: _themePreset.seedColor,
+        seedColor: themeState.preset.seedColor,
       ),
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 320),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
         child: _showSplash
-            ? const VaultZeroSplashScreen(
-                key: ValueKey('vault-zero-splash'),
-              )
-            : CharacterEntryScreen(
-                key: const ValueKey('vault-zero-home'),
-                themeMode: _themeMode,
-                selectedThemePreset: _themePreset,
-                onThemeModeChanged: _changeThemeMode,
-                onThemePresetChanged: _changeThemePreset,
-              ),
+            ? const VaultZeroSplashScreen(key: ValueKey('vault-zero-splash'))
+            : const CharacterEntryScreen(key: ValueKey('vault-zero-home')),
       ),
     );
   }
