@@ -4,7 +4,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/models/field_definition.dart';
 import '../../../domain/models/record.dart';
 import 'controllers/record_list_controller.dart';
-import 'widgets/dynamic_field_input.dart';
 
 class RecordFormScreen extends ConsumerStatefulWidget {
   final String databaseId;
@@ -24,21 +23,38 @@ class RecordFormScreen extends ConsumerStatefulWidget {
 
 class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  late Map<String, dynamic> _values;
+  
+  // Controllers and FocusNodes for fast entry
+  late final List<TextEditingController> _controllers;
+  late final List<FocusNode> _focusNodes;
 
   @override
   void initState() {
     super.initState();
-    _values = {};
-
-    if (widget.initialRecord != null) {
-      for (final field in widget.fields) {
-        final fieldValue = widget.initialRecord!.values[field.id];
-        if (fieldValue != null) {
-          _values[field.id] = fieldValue.value;
+    
+    _controllers = List.generate(widget.fields.length, (index) {
+      final field = widget.fields[index];
+      final fieldValue = widget.initialRecord?.values[field.id];
+      // Format decimal safely to remove trailing zero if needed, otherwise just toString()
+      String textValue = '';
+      if (fieldValue != null && fieldValue.value != null) {
+        if (field.type == FieldType.decimal && fieldValue.value is double) {
+           textValue = fieldValue.value.toString().replaceAll(RegExp(r'\.0$'), '');
+        } else {
+           textValue = fieldValue.value.toString();
         }
       }
-    }
+      return TextEditingController(text: textValue);
+    });
+
+    _focusNodes = List.generate(widget.fields.length, (index) => FocusNode());
+  }
+
+  @override
+  void dispose() {
+    for (final c in _controllers) { c.dispose(); }
+    for (final f in _focusNodes) { f.dispose(); }
+    super.dispose();
   }
 
   void _onSave() async {
@@ -46,16 +62,32 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
       return;
     }
 
+    final rawValues = <String, dynamic>{};
+    for (int i = 0; i < widget.fields.length; i++) {
+      rawValues[widget.fields[i].id] = _controllers[i].text.trim();
+    }
+
     final controller = ref.read(recordListControllerProvider(widget.databaseId).notifier);
 
-    await controller.saveRecord(
-      existingRecord: widget.initialRecord,
-      fields: widget.fields,
-      rawValues: _values,
-    );
+    try {
+      await controller.saveRecord(
+        existingRecord: widget.initialRecord,
+        fields: widget.fields,
+        rawValues: rawValues,
+      );
 
-    if (mounted) {
-      Navigator.of(context).pop();
+      if (mounted) {
+        Navigator.of(context).pop();
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(e.toString().replaceAll('Exception: ', '')),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
     }
   }
 
@@ -81,13 +113,31 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
           itemCount: widget.fields.length,
           itemBuilder: (context, index) {
             final field = widget.fields[index];
+            final isLast = index == widget.fields.length - 1;
+            
             return Padding(
               padding: const EdgeInsets.only(bottom: 24),
-              child: DynamicFieldInput(
-                field: field,
-                initialValue: _values[field.id],
-                onChanged: (val) {
-                  _values[field.id] = val;
+              child: TextFormField(
+                controller: _controllers[index],
+                focusNode: _focusNodes[index],
+                autofocus: index == 0,
+                textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+                textCapitalization: TextCapitalization.sentences,
+                decoration: InputDecoration(
+                  labelText: field.name,
+                ),
+                onFieldSubmitted: (_) {
+                  if (isLast) {
+                    _onSave();
+                  } else {
+                    FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+                  }
+                },
+                validator: (val) {
+                  if (field.isRequired && (val == null || val.trim().isEmpty)) {
+                    return 'This field is required';
+                  }
+                  return null;
                 },
               ),
             );

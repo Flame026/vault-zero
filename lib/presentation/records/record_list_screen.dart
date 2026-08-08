@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'package:share_plus/share_plus.dart';
+
 import '../../../domain/models/database_definition.dart';
 import '../fields/controllers/field_list_controller.dart';
 import '../fields/field_list_screen.dart';
 import 'controllers/record_list_controller.dart';
+import 'controllers/v2_export_controller.dart';
 import 'record_form_screen.dart';
 import 'widgets/delete_record_dialog.dart';
 import 'widgets/record_card.dart';
@@ -52,17 +55,53 @@ class RecordListScreen extends ConsumerWidget {
     );
   }
 
+  void _handleExport(BuildContext context, WidgetRef ref, fields) async {
+    try {
+      final file = await ref.read(v2ExportControllerProvider.notifier).exportToExcel(database, fields);
+      if (file != null) {
+        await Share.shareXFiles([XFile(file.path)], text: 'Vault Zero Export: ${database.name}');
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Export Complete!')),
+          );
+        }
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Export Failed: ${e.toString().replaceAll('Exception: ', '').replaceAll('Bad state: ', '')}'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final fieldsState = ref.watch(fieldListControllerProvider(database.id));
     final recordsState = ref.watch(recordListControllerProvider(database.id));
+    final exportState = ref.watch(v2ExportControllerProvider);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    
+    final isExporting = exportState.isLoading;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(database.name),
         actions: [
+          fieldsState.maybeWhen(
+            data: (fields) => IconButton(
+              icon: isExporting
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.file_download_outlined),
+              tooltip: 'Export to Excel',
+              onPressed: isExporting ? null : () => _handleExport(context, ref, fields),
+            ),
+            orElse: () => const SizedBox.shrink(),
+          ),
           IconButton(
             icon: const Icon(Icons.schema_rounded),
             tooltip: 'Manage Fields',

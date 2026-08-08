@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import '../../../domain/models/field_definition.dart';
 import '../../../domain/models/field_value.dart';
@@ -19,28 +18,9 @@ class RecordCard extends StatelessWidget {
     required this.onDelete,
   });
 
-  String _formatFieldValue(FieldValue? value, FieldType type) {
-    if (value == null) return 'Empty';
-
-    switch (type) {
-      case FieldType.date:
-        if (value is DateFieldValue) {
-          return DateFormat.yMMMd().format(value.value);
-        }
-        return value.value.toString();
-      case FieldType.dateTime:
-        if (value is DateTimeFieldValue) {
-          return DateFormat.yMd().add_jm().format(value.value);
-        }
-        return value.value.toString();
-      case FieldType.boolean:
-        if (value is BooleanFieldValue) {
-          return value.value ? 'Yes' : 'No';
-        }
-        return value.value.toString();
-      default:
-        return value.value.toString();
-    }
+  String _formatFieldValue(FieldValue? fieldValue) {
+    if (fieldValue == null || fieldValue.value == null) return '';
+    return fieldValue.value.toString();
   }
 
   @override
@@ -55,14 +35,14 @@ class RecordCard extends StatelessWidget {
       final primaryField = fields[0];
       final primaryValue = record.values[primaryField.id];
       if (primaryValue != null && primaryValue.value != null && primaryValue.value.toString().isNotEmpty) {
-        primaryText = _formatFieldValue(primaryValue, primaryField.type);
+        primaryText = _formatFieldValue(primaryValue);
       }
 
       if (fields.length > 1) {
         final secondaryField = fields[1];
         final secondaryValue = record.values[secondaryField.id];
         if (secondaryValue != null && secondaryValue.value != null && secondaryValue.value.toString().isNotEmpty) {
-          secondaryText = _formatFieldValue(secondaryValue, secondaryField.type);
+          secondaryText = _formatFieldValue(secondaryValue);
         }
       }
     }

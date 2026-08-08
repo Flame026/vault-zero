@@ -26,37 +26,78 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
     final Map<String, FieldValue> fieldValues = {};
     
     for (final field in fields) {
-      final rawValue = rawValues[field.id];
-      // Keep existing FieldValue ID if editing, otherwise generate new one
+      final String rawString = (rawValues[field.id] as String?) ?? '';
       final valueId = existingRecord?.values[field.id]?.id ?? const Uuid().v4();
       
       FieldValue fieldValue;
-      switch (field.type) {
-        case FieldType.text:
-          fieldValue = TextFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as String?) ?? '');
-          break;
-        case FieldType.longText:
-          fieldValue = LongTextFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as String?) ?? '');
-          break;
-        case FieldType.integer:
-          fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as int?) ?? 0);
-          break;
-        case FieldType.decimal:
-          fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as double?) ?? 0.0);
-          break;
-        case FieldType.boolean:
-          fieldValue = BooleanFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as bool?) ?? false);
-          break;
-        case FieldType.date:
-          fieldValue = DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as DateTime?) ?? DateTime(1970));
-          break;
-        case FieldType.dateTime:
-          fieldValue = DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as DateTime?) ?? DateTime(1970));
-          break;
-        case FieldType.choice:
-          fieldValue = ChoiceFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: (rawValue as String?) ?? '');
-          break;
+      
+      try {
+        switch (field.type) {
+          case FieldType.text:
+          case FieldType.longText:
+            fieldValue = field.type == FieldType.text 
+              ? TextFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: rawString)
+              : LongTextFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: rawString);
+            break;
+            
+          case FieldType.integer:
+            if (rawString.isEmpty && !field.isRequired) {
+              fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0);
+              break;
+            }
+            final parsedInt = int.tryParse(rawString);
+            if (parsedInt == null) {
+              throw Exception('Invalid integer value for field "${field.name}"');
+            }
+            fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedInt);
+            break;
+            
+          case FieldType.decimal:
+            if (rawString.isEmpty && !field.isRequired) {
+              fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0.0);
+              break;
+            }
+            final parsedDouble = double.tryParse(rawString);
+            if (parsedDouble == null) {
+              throw Exception('Invalid decimal value for field "${field.name}"');
+            }
+            fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedDouble);
+            break;
+            
+          case FieldType.boolean:
+            final l = rawString.trim().toLowerCase();
+            final boolVal = (l == 'true' || l == 'yes' || l == '1');
+            fieldValue = BooleanFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: boolVal);
+            break;
+            
+          case FieldType.date:
+          case FieldType.dateTime:
+            if (rawString.isEmpty && !field.isRequired) {
+              fieldValue = field.type == FieldType.date
+                  ? DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970))
+                  : DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970));
+              break;
+            }
+            final parsedDate = DateTime.tryParse(rawString);
+            if (parsedDate == null) {
+              throw Exception('Invalid date format for field "${field.name}". Use YYYY-MM-DD');
+            }
+            fieldValue = field.type == FieldType.date
+                ? DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedDate)
+                : DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedDate);
+            break;
+            
+          case FieldType.choice:
+            fieldValue = ChoiceFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: rawString);
+            break;
+        }
+      } catch (e) {
+        if (e is Exception && e.toString().contains('Invalid')) {
+          rethrow;
+        }
+        throw Exception('Failed to save field "${field.name}"');
       }
+      
       fieldValues[field.id] = fieldValue;
     }
 
