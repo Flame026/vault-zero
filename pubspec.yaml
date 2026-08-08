@@ -16,10 +16,12 @@ dependencies:
   path_provider: ^2.1.5
   share_plus: ^10.1.4
   flutter_riverpod: ^2.5.1
+  uuid: ^4.4.0
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  sqflite_common_ffi: ^2.3.3
   flutter_lints: ^6.0.0
   flutter_launcher_icons: ^0.14.4
 
