@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../models/character.dart';
-import '../repositories/legacy_character_repository.dart';
+import '../../models/character.dart';
+import '../../repositories/legacy_character_repository.dart';
 
 final characterListControllerProvider = AsyncNotifierProvider<CharacterListController, List<Character>>(() {
   return CharacterListController();

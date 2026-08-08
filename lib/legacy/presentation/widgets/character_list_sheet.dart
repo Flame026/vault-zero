@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../controllers/character_list_controller.dart';
+import '../controllers/character_list_controller.dart';
 import '../../models/character.dart';
 
 class CharacterListSheet extends ConsumerStatefulWidget {

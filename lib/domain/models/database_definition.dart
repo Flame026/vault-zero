@@ -1,3 +1,5 @@
+import 'field_definition.dart';
+
 class DatabaseDefinition {
   final String id;
   final String name;

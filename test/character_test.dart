@@ -1,4 +1,4 @@
-import 'package:character_collector/models/character.dart';
+import 'package:character_collector/legacy/models/character.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 void main() {
