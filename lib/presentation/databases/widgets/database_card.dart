@@ -7,6 +7,7 @@ class DatabaseCard extends StatelessWidget {
   final VoidCallback onTap;
   final VoidCallback onEdit;
   final VoidCallback onDelete;
+  final VoidCallback onManageFields;
 
   const DatabaseCard({
     super.key,
@@ -14,6 +15,7 @@ class DatabaseCard extends StatelessWidget {
     required this.onTap,
     required this.onEdit,
     required this.onDelete,
+    required this.onManageFields,
   });
 
   @override
@@ -81,13 +83,25 @@ class DatabaseCard extends StatelessWidget {
                   PopupMenuButton<String>(
                     icon: const Icon(Icons.more_vert),
                     onSelected: (value) {
-                      if (value == 'edit') {
+                      if (value == 'manage_fields') {
+                        onManageFields();
+                      } else if (value == 'edit') {
                         onEdit();
                       } else if (value == 'delete') {
                         onDelete();
                       }
                     },
                     itemBuilder: (context) => [
+                      const PopupMenuItem(
+                        value: 'manage_fields',
+                        child: Row(
+                          children: [
+                            Icon(Icons.schema_rounded, size: 20),
+                            SizedBox(width: 12),
+                            Text('Manage Fields'),
+                          ],
+                        ),
+                      ),
                       const PopupMenuItem(
                         value: 'edit',
                         child: Row(
