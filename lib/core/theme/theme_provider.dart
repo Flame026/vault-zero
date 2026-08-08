@@ -1,10 +1,7 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:path_provider/path_provider.dart';
 
+import '../preferences/preferences_repository.dart';
 import 'theme_preset.dart';
 
 class ThemeState {
@@ -28,38 +25,20 @@ class ThemeState {
 }
 
 class ThemeController extends Notifier<ThemeState> {
-  static const String _preferencesFileName = 'vault_zero_preferences.json';
-  static const String _legacyPreferencesFileName = 'character_collector_preferences.json';
+  late final PreferencesRepository _preferencesRepo;
 
   @override
   ThemeState build() {
+    _preferencesRepo = ref.watch(preferencesRepositoryProvider);
+    // Asynchronous load triggers state update later
     _loadPreferences();
     return const ThemeState(mode: ThemeMode.light, preset: ThemePreset.royalPurple);
   }
 
-  Future<File> _getPreferencesFile(String fileName) async {
-    final directory = await getApplicationDocumentsDirectory();
-    return File('${directory.path}/$fileName');
-  }
-
   Future<void> _loadPreferences() async {
-    try {
-      final currentFile = await _getPreferencesFile(_preferencesFileName);
-      final legacyFile = await _getPreferencesFile(_legacyPreferencesFileName);
+    final data = await _preferencesRepo.loadPreferences();
 
-      final File sourceFile;
-
-      if (await currentFile.exists()) {
-        sourceFile = currentFile;
-      } else if (await legacyFile.exists()) {
-        sourceFile = legacyFile;
-      } else {
-        return;
-      }
-
-      final jsonText = await sourceFile.readAsString();
-      final data = jsonDecode(jsonText) as Map<String, dynamic>;
-
+    if (data.isNotEmpty) {
       final savedThemeMode = data['themeMode'] == 'dark' ? ThemeMode.dark : ThemeMode.light;
       final savedPresetName = data['themePreset'] as String?;
 
@@ -69,25 +48,15 @@ class ThemeController extends Notifier<ThemeState> {
       );
 
       state = ThemeState(mode: savedThemeMode, preset: savedPreset);
-
-      if (sourceFile.path == legacyFile.path) {
-        await _savePreferences();
-      }
-    } catch (_) {
-      // Keep defaults
     }
   }
 
   Future<void> _savePreferences() async {
-    try {
-      final file = await _getPreferencesFile(_preferencesFileName);
-      final data = <String, String>{
-        'themeMode': state.mode == ThemeMode.dark ? 'dark' : 'light',
-        'themePreset': state.preset.name,
-      };
-
-      await file.writeAsString(jsonEncode(data), flush: true);
-    } catch (_) {}
+    final data = <String, dynamic>{
+      'themeMode': state.mode == ThemeMode.dark ? 'dark' : 'light',
+      'themePreset': state.preset.name,
+    };
+    await _preferencesRepo.savePreferences(data);
   }
 
   void changeMode(ThemeMode mode) {

@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/theme/theme_provider.dart';
-import 'legacy/presentation/screens/character_entry_screen.dart';
+import 'presentation/databases/database_list_screen.dart';
 
 void main() {
   runApp(const ProviderScope(child: VaultZeroApp()));
@@ -135,7 +135,7 @@ class _VaultZeroAppState extends ConsumerState<VaultZeroApp> {
         switchOutCurve: Curves.easeIn,
         child: _showSplash
             ? const VaultZeroSplashScreen(key: ValueKey('vault-zero-splash'))
-            : const CharacterEntryScreen(key: ValueKey('vault-zero-home')),
+            : const DatabaseListScreen(key: ValueKey('vault-zero-home')),
       ),
     );
   }

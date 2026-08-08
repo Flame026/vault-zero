@@ -1,7 +1,6 @@
 import 'dart:convert';
 
 import 'package:sqflite/sqflite.dart';
-
 import '../../domain/models/database_definition.dart';
 import '../../domain/models/field_definition.dart';
 import '../../domain/repositories/schema_repository.dart';
