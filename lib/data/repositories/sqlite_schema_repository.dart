@@ -122,6 +122,32 @@ class SqliteSchemaRepository implements SchemaRepository {
   }
 
   @override
+  Future<void> updateFields(List<FieldDefinition> fields) async {
+    await db.transaction((txn) async {
+      for (final field in fields) {
+        String? configJson;
+        if (field.configuration is ChoiceConfig) {
+          configJson = jsonEncode({'options': (field.configuration as ChoiceConfig).options});
+        }
+
+        await txn.update(
+          'fields',
+          {
+            'name': field.name,
+            'type': field.type.name,
+            'position': field.position,
+            'is_required': field.isRequired ? 1 : 0,
+            'configuration': configJson,
+            'updated_at': field.updatedAt.millisecondsSinceEpoch,
+          },
+          where: 'id = ?',
+          whereArgs: [field.id],
+        );
+      }
+    });
+  }
+
+  @override
   Future<void> deleteField(String id) async {
     await db.delete(
       'fields',

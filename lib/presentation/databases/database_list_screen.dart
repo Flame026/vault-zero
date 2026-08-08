@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../legacy/presentation/screens/character_entry_screen.dart';
+import '../fields/field_list_screen.dart';
 import 'controllers/database_list_controller.dart';
 import 'widgets/database_card.dart';
 import 'widgets/database_form_dialog.dart';
@@ -80,8 +81,10 @@ class DatabaseListScreen extends ConsumerWidget {
                 return DatabaseCard(
                   database: db,
                   onTap: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Records feature coming soon!')),
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => FieldListScreen(database: db),
+                      ),
                     );
                   },
                   onEdit: () => _showEditDialog(context, ref, db),

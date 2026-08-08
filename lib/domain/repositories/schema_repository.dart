@@ -10,6 +10,7 @@ abstract class SchemaRepository {
 
   Future<void> createField(FieldDefinition field);
   Future<void> updateField(FieldDefinition field);
+  Future<void> updateFields(List<FieldDefinition> fields);
   Future<void> deleteField(String id);
   Future<List<FieldDefinition>> getFieldsForDatabase(String databaseId);
 }
