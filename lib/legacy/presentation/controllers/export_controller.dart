@@ -16,8 +16,9 @@ class ExportController extends AsyncNotifier<void> {
 
   Future<File?> exportToExcel() async {
     state = const AsyncValue.loading();
+    File? generatedFile;
     
-    return await AsyncValue.guard(() async {
+    state = await AsyncValue.guard(() async {
       final repo = await ref.read(legacyCharacterRepositoryProvider.future);
       final characters = await repo.getAllCharacters();
 
@@ -65,11 +66,10 @@ class ExportController extends AsyncNotifier<void> {
       final file = File('${directory.path}/$fileName');
 
       await file.writeAsBytes(bytes, flush: true);
-      return file;
-    }).then((value) {
-      state = const AsyncValue.data(null);
-      return value.valueOrNull;
+      generatedFile = file;
     });
+    
+    return generatedFile;
   }
 
   String _twoDigits(int value) => value.toString().padLeft(2, '0');

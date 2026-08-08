@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:share_plus/share_plus.dart';
 
 import '../../../core/theme/theme_provider.dart';
 import '../../models/character.dart';
@@ -279,8 +280,6 @@ class _CharacterEntryScreenState extends ConsumerState<CharacterEntryScreen> {
     ref.listen(exportControllerProvider, (previous, next) {
       if (next.hasError) {
         showMessage('Export Failed. Check storage and try again.');
-      } else if (next.hasValue && next.value != null && previous?.isLoading == true) {
-        showMessage('Export Complete!');
       }
     });
 
@@ -366,7 +365,13 @@ class _CharacterEntryScreenState extends ConsumerState<CharacterEntryScreen> {
                 ),
                 const SizedBox(height: 12),
                 fullWidthButton(
-                  onPressed: isExporting ? null : () => ref.read(exportControllerProvider.notifier).exportToExcel(),
+                  onPressed: isExporting ? null : () async {
+                    final file = await ref.read(exportControllerProvider.notifier).exportToExcel();
+                    if (file != null && mounted) {
+                      await Share.shareXFiles([XFile(file.path)], text: 'Vault Zero Export');
+                      if (mounted) showMessage('Export Complete!');
+                    }
+                  },
                   child: Row(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
