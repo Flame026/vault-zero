@@ -6,7 +6,8 @@ import 'package:path_provider/path_provider.dart';
 
 import '../../../domain/models/database_definition.dart';
 import '../../../domain/models/field_definition.dart';
-import 'record_list_controller.dart';
+import '../../../domain/models/record_page.dart';
+import '../../../core/providers.dart';
 
 final v2ExportControllerProvider = AsyncNotifierProvider<V2ExportController, void>(() {
   return V2ExportController();
@@ -17,9 +18,12 @@ class V2ExportController extends AsyncNotifier<void> {
   Future<void> build() async {}
 
   Future<File?> exportToExcel(DatabaseDefinition database, List<FieldDefinition> fields) async {
-    final records = await ref.read(recordListControllerProvider(database.id).future);
+    final repository = await ref.read(recordRepositoryProvider.future);
 
-    if (records.isEmpty) {
+    // Explicitly check for records before starting export to maintain the exact pre-V2.5-B contract.
+    // We fetch 100 records so we can immediately start processing if not empty.
+    final firstPage = await repository.getRecordsPage(database.id, limit: 100);
+    if (firstPage.records.isEmpty) {
       throw StateError('Cannot export a database with no records.');
     }
 
@@ -27,6 +31,7 @@ class V2ExportController extends AsyncNotifier<void> {
     File? generatedFile;
     
     state = await AsyncValue.guard(() async {
+
       final excel = Excel.createExcel();
       
       // Sanitize sheet name (max 31 chars, no invalid chars)
@@ -44,18 +49,32 @@ class V2ExportController extends AsyncNotifier<void> {
       final headers = sortedFields.map((f) => TextCellValue(f.name)).toList();
       sheet.appendRow(headers);
 
-      // Append data rows
-      for (final record in records) {
-        final rowCells = <CellValue>[];
-        for (final field in sortedFields) {
-          final fieldValue = record.values[field.id];
-          if (fieldValue != null && fieldValue.value != null) {
-            rowCells.add(TextCellValue(fieldValue.value.toString()));
-          } else {
-            rowCells.add(TextCellValue(''));
+      RecordPage currentPage = firstPage;
+      bool hasMore = true;
+
+      while (hasMore) {
+        // Append data rows
+        for (final record in currentPage.records) {
+          final rowCells = <CellValue>[];
+          for (final field in sortedFields) {
+            final fieldValue = record.values[field.id];
+            if (fieldValue != null && fieldValue.value != null) {
+              rowCells.add(TextCellValue(fieldValue.value.toString()));
+            } else {
+              rowCells.add(TextCellValue(''));
+            }
           }
+          sheet.appendRow(rowCells);
         }
-        sheet.appendRow(rowCells);
+
+        hasMore = currentPage.hasMore;
+        if (hasMore) {
+          currentPage = await repository.getRecordsPage(
+            database.id,
+            limit: 100,
+            after: currentPage.nextCursor,
+          );
+        }
       }
 
       excel.delete('Sheet1');

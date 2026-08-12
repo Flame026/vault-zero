@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import '../../domain/models/field_definition.dart';
 import '../../domain/models/field_value.dart';
 import '../../domain/models/record.dart';
+import '../../domain/models/record_page.dart';
 import '../../domain/repositories/record_repository.dart';
 
 class SqliteRecordRepository implements RecordRepository {
@@ -160,6 +161,118 @@ class SqliteRecordRepository implements RecordRepository {
     return records;
   }
 
+  @override
+  Future<RecordPage> getRecordsPage(
+    String databaseId, {
+    int limit = 50,
+    RecordCursor? after,
+  }) async {
+    final whereClauses = ['database_id = ?'];
+    final whereArgs = <dynamic>[databaseId];
+
+    if (after != null) {
+      whereClauses.add('(created_at > ? OR (created_at = ? AND id > ?))');
+      whereArgs.addAll([
+        after.createdAt.millisecondsSinceEpoch,
+        after.createdAt.millisecondsSinceEpoch,
+        after.id,
+      ]);
+    }
+
+    final results = await db.query(
+      'records',
+      where: whereClauses.join(' AND '),
+      whereArgs: whereArgs,
+      orderBy: 'created_at ASC, id ASC',
+      limit: limit + 1,
+    );
+
+    final hasMore = results.length > limit;
+    final pageResults = hasMore ? results.sublist(0, limit) : results;
+
+    if (pageResults.isEmpty) {
+      return const RecordPage(records: [], hasMore: false);
+    }
+
+    final fields = await db.query(
+      'fields',
+      where: 'database_id = ?',
+      whereArgs: [databaseId],
+    );
+
+    final Map<String, FieldType> dbFields = {
+      for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+    };
+
+    final recordIds = pageResults.map((r) => r['id'] as String).toList();
+    final placeholders = List.filled(recordIds.length, '?').join(',');
+
+    final valueResults = await db.query(
+      'field_values',
+      where: 'record_id IN ($placeholders)',
+      whereArgs: recordIds,
+    );
+
+    final Map<String, Map<String, FieldValue>> groupedValues = {};
+    for (final id in recordIds) {
+      groupedValues[id] = {};
+    }
+
+    for (final row in valueResults) {
+      final recordId = row['record_id'] as String;
+      final fieldId = row['field_id'] as String;
+      final type = dbFields[fieldId];
+      if (type == null) continue;
+
+      final id = row['id'] as String;
+      groupedValues[recordId]![fieldId] = _mapFieldValue(type, id, recordId, fieldId, row);
+    }
+
+    final records = pageResults.map((row) {
+      final id = row['id'] as String;
+      return Record(
+        id: id,
+        databaseId: databaseId,
+        values: groupedValues[id]!,
+        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
+      );
+    }).toList();
+
+    RecordCursor? nextCursor;
+    if (hasMore) {
+      final lastRecord = records.last;
+      nextCursor = RecordCursor(createdAt: lastRecord.createdAt, id: lastRecord.id);
+    }
+
+    return RecordPage(
+      records: records,
+      nextCursor: nextCursor,
+      hasMore: hasMore,
+    );
+  }
+
+  FieldValue _mapFieldValue(FieldType type, String id, String recordId, String fieldId, Map<String, Object?> row) {
+    switch (type) {
+      case FieldType.text:
+        return TextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
+      case FieldType.longText:
+        return LongTextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
+      case FieldType.integer:
+        return IntegerFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['integer_value'] as int? ?? 0);
+      case FieldType.decimal:
+        return DecimalFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['decimal_value'] as num?)?.toDouble() ?? 0.0);
+      case FieldType.boolean:
+        return BooleanFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['boolean_value'] as int?) == 1);
+      case FieldType.date:
+        return DateFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_value'] as int? ?? 0));
+      case FieldType.dateTime:
+        return DateTimeFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_time_value'] as int? ?? 0));
+      case FieldType.choice:
+        return ChoiceFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['choice_value'] as String? ?? '');
+    }
+  }
+
   Future<Map<String, FieldValue>> _getValuesForRecord(String recordId, String databaseId) async {
     // Need field types to instantiate correct FieldValue
     final fields = await db.query(
@@ -186,35 +299,7 @@ class SqliteRecordRepository implements RecordRepository {
       if (type == null) continue; // Orphaned value, shouldn't happen with CASCADE
 
       final id = row['id'] as String;
-
-      FieldValue fieldValue;
-      switch (type) {
-        case FieldType.text:
-          fieldValue = TextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
-          break;
-        case FieldType.longText:
-          fieldValue = LongTextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
-          break;
-        case FieldType.integer:
-          fieldValue = IntegerFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['integer_value'] as int? ?? 0);
-          break;
-        case FieldType.decimal:
-          fieldValue = DecimalFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['decimal_value'] as num?)?.toDouble() ?? 0.0);
-          break;
-        case FieldType.boolean:
-          fieldValue = BooleanFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['boolean_value'] as int?) == 1);
-          break;
-        case FieldType.date:
-          fieldValue = DateFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_value'] as int? ?? 0));
-          break;
-        case FieldType.dateTime:
-          fieldValue = DateTimeFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_time_value'] as int? ?? 0));
-          break;
-        case FieldType.choice:
-          fieldValue = ChoiceFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['choice_value'] as String? ?? '');
-          break;
-      }
-      values[fieldId] = fieldValue;
+      values[fieldId] = _mapFieldValue(type, id, recordId, fieldId, row);
     }
 
     return values;

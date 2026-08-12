@@ -7,7 +7,7 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 
   return openDatabase(
     join(dbPath, 'characters.db'),
-    version: 2,
+    version: 3,
     onConfigure: (db) async {
       await db.execute('PRAGMA foreign_keys = ON');
     },
@@ -30,10 +30,18 @@ final databaseProvider = FutureProvider<Database>((ref) async {
       if (version >= 2) {
         await _createV2Tables(db);
       }
+
+      if (version >= 3) {
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)');
+      }
     },
     onUpgrade: (db, oldVersion, newVersion) async {
       if (oldVersion < 2) {
         await _createV2Tables(db);
+      }
+
+      if (oldVersion < 3) {
+        await db.execute('CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)');
       }
     },
   );

@@ -6,11 +6,55 @@ import '../../../domain/models/field_definition.dart';
 import '../../../domain/models/field_value.dart';
 import '../../../domain/models/record.dart';
 
+import '../../../domain/models/record_page.dart';
+
 class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
+  RecordCursor? _nextCursor;
+  bool _hasMore = true;
+  bool _isFetchingMore = false;
+
+  bool get hasMore => _hasMore;
+  bool get isFetchingMore => _isFetchingMore;
+
   @override
   Future<List<Record>> build(String arg) async {
+    _nextCursor = null;
+    _hasMore = true;
+    _isFetchingMore = false;
+
     final repository = await ref.watch(recordRepositoryProvider.future);
-    return repository.getRecordsForDatabase(arg);
+    final page = await repository.getRecordsPage(arg, limit: 50);
+
+    _nextCursor = page.nextCursor;
+    _hasMore = page.hasMore;
+    return page.records;
+  }
+
+  Future<void> loadMore() async {
+    if (!_hasMore || _isFetchingMore) return;
+
+    _isFetchingMore = true;
+    // Notify listeners so UI can show loading indicator
+    state = AsyncValue.data(state.value ?? []);
+
+    try {
+      final repository = await ref.read(recordRepositoryProvider.future);
+      final page = await repository.getRecordsPage(arg, limit: 50, after: _nextCursor);
+
+      _nextCursor = page.nextCursor;
+      _hasMore = page.hasMore;
+
+      final currentRecords = state.value ?? [];
+      state = AsyncValue.data([...currentRecords, ...page.records]);
+    } catch (e, st) {
+      state = AsyncValue.error(e, st);
+    } finally {
+      _isFetchingMore = false;
+      // Trigger rebuild to remove loading indicator if no error
+      if (!state.hasError) {
+        state = AsyncValue.data(state.value ?? []);
+      }
+    }
   }
 
   Future<void> saveRecord({
@@ -109,21 +153,43 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
       updatedAt: now,
     );
 
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      await repository.saveRecord(newRecord);
-      return repository.getRecordsForDatabase(arg);
-    });
+    // Save through repository
+    await repository.saveRecord(newRecord);
+
+    // Update local state without reloading database
+    final currentRecords = state.value ?? [];
+
+    if (existingRecord != null) {
+      // Edit: Replace matching record
+      final index = currentRecords.indexWhere((r) => r.id == newRecord.id);
+      if (index != -1) {
+        final newRecords = List<Record>.from(currentRecords);
+        newRecords[index] = newRecord;
+        state = AsyncValue.data(newRecords);
+      }
+    } else {
+      // Create: Records are ordered by created_at ASC.
+      // A newly created record goes at the very end of the database.
+      if (!_hasMore) {
+        // We have loaded the end of the database, so append it visually
+        state = AsyncValue.data([...currentRecords, newRecord]);
+      } else {
+        // We haven't scrolled to the end yet, so don't append it to the current UI list
+        // It will be loaded naturally when the user reaches the last page.
+      }
+    }
   }
 
   Future<void> deleteRecord(String id) async {
     final repository = await ref.read(recordRepositoryProvider.future);
     
-    state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() async {
-      await repository.deleteRecord(id);
-      return repository.getRecordsForDatabase(arg);
-    });
+    // Delete through repository
+    await repository.deleteRecord(id);
+
+    // Remove locally
+    final currentRecords = state.value ?? [];
+    final newRecords = currentRecords.where((r) => r.id != id).toList();
+    state = AsyncValue.data(newRecords);
   }
 }
 

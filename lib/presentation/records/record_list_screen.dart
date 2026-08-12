@@ -12,16 +12,41 @@ import 'record_form_screen.dart';
 import 'widgets/delete_record_dialog.dart';
 import 'widgets/record_card.dart';
 
-class RecordListScreen extends ConsumerWidget {
+class RecordListScreen extends ConsumerStatefulWidget {
   final DatabaseDefinition database;
 
   const RecordListScreen({super.key, required this.database});
 
+  @override
+  ConsumerState<RecordListScreen> createState() => _RecordListScreenState();
+}
+
+class _RecordListScreenState extends ConsumerState<RecordListScreen> {
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.removeListener(_onScroll);
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    if (_scrollController.position.pixels >= _scrollController.position.maxScrollExtent - 200) {
+      ref.read(recordListControllerProvider(widget.database.id).notifier).loadMore();
+    }
+  }
   void _showCreateScreen(BuildContext context, fields) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => RecordFormScreen(
-          databaseId: database.id,
+          databaseId: widget.database.id,
           fields: fields,
         ),
       ),
@@ -32,7 +57,7 @@ class RecordListScreen extends ConsumerWidget {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => RecordFormScreen(
-          databaseId: database.id,
+          databaseId: widget.database.id,
           initialRecord: record,
           fields: fields,
         ),
@@ -43,23 +68,23 @@ class RecordListScreen extends ConsumerWidget {
   void _showDeleteDialog(BuildContext context, WidgetRef ref, record) async {
     final confirmed = await DeleteRecordDialog.show(context);
     if (confirmed) {
-      ref.read(recordListControllerProvider(database.id).notifier).deleteRecord(record.id);
+      ref.read(recordListControllerProvider(widget.database.id).notifier).deleteRecord(record.id);
     }
   }
 
   void _openManageFields(BuildContext context) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => FieldListScreen(database: database),
+        builder: (context) => FieldListScreen(database: widget.database),
       ),
     );
   }
 
   void _handleExport(BuildContext context, WidgetRef ref, fields) async {
     try {
-      final file = await ref.read(v2ExportControllerProvider.notifier).exportToExcel(database, fields);
+      final file = await ref.read(v2ExportControllerProvider.notifier).exportToExcel(widget.database, fields);
       if (file != null) {
-        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Vault Zero Export: ${database.name}'));
+        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Vault Zero Export: ${widget.database.name}'));
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Export Complete!')),
@@ -79,18 +104,19 @@ class RecordListScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final fieldsState = ref.watch(fieldListControllerProvider(database.id));
-    final recordsState = ref.watch(recordListControllerProvider(database.id));
+  Widget build(BuildContext context) {
+    final fieldsState = ref.watch(fieldListControllerProvider(widget.database.id));
+    final recordsState = ref.watch(recordListControllerProvider(widget.database.id));
     final exportState = ref.watch(v2ExportControllerProvider);
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
     
     final isExporting = exportState.isLoading;
+    final isFetchingMore = ref.watch(recordListControllerProvider(widget.database.id).notifier).isFetchingMore;
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(database.name),
+        title: Text(widget.database.name),
         actions: [
           fieldsState.maybeWhen(
             data: (fields) => IconButton(
@@ -122,12 +148,20 @@ class RecordListScreen extends ConsumerWidget {
               }
               return RefreshIndicator(
                 onRefresh: () async {
-                  ref.invalidate(recordListControllerProvider(database.id));
+                  ref.invalidate(recordListControllerProvider(widget.database.id));
                 },
                 child: ListView.builder(
+                  controller: _scrollController,
+                  physics: const AlwaysScrollableScrollPhysics(),
                   padding: const EdgeInsets.all(16),
-                  itemCount: records.length,
+                  itemCount: records.length + (isFetchingMore ? 1 : 0),
                   itemBuilder: (context, index) {
+                    if (index == records.length) {
+                      return const Padding(
+                        padding: EdgeInsets.symmetric(vertical: 16),
+                        child: Center(child: CircularProgressIndicator()),
+                      );
+                    }
                     final record = records[index];
                     return Padding(
                       key: ValueKey(record.id),
@@ -232,8 +266,8 @@ class RecordListScreen extends ConsumerWidget {
             const SizedBox(height: 24),
             FilledButton.icon(
               onPressed: () {
-                ref.invalidate(fieldListControllerProvider(database.id));
-                ref.invalidate(recordListControllerProvider(database.id));
+                ref.invalidate(fieldListControllerProvider(widget.database.id));
+                ref.invalidate(recordListControllerProvider(widget.database.id));
               },
               icon: const Icon(Icons.refresh),
               label: const Text('Retry'),
