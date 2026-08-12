@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../legacy/presentation/screens/character_entry_screen.dart';
 import '../fields/field_list_screen.dart';
 import '../records/record_list_screen.dart';
+import '../settings/settings_screen.dart';
 import 'controllers/database_list_controller.dart';
 import 'widgets/database_card.dart';
 import 'widgets/database_form_dialog.dart';
@@ -56,6 +57,15 @@ class DatabaseListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: const Text('Vault Zero'),
         actions: [
+          IconButton(
+            icon: const Icon(Icons.settings),
+            tooltip: 'Settings',
+            onPressed: () {
+              Navigator.of(context).push(
+                MaterialPageRoute(builder: (context) => const SettingsScreen()),
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.history_rounded),
             tooltip: 'Legacy Archive',

@@ -1,0 +1,176 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:intl/intl.dart';
+import 'package:share_plus/share_plus.dart';
+
+import '../../core/providers.dart';
+import '../../domain/models/vault_backup.dart';
+
+class SettingsScreen extends ConsumerStatefulWidget {
+  const SettingsScreen({super.key});
+
+  @override
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
+  bool _isLoading = false;
+
+  Future<void> _handleBackup() async {
+    setState(() => _isLoading = true);
+    try {
+      final service = await ref.read(backupRestoreServiceProvider.future);
+      final jsonContent = await service.exportVault();
+      
+      final dateStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+      final filename = 'vault_backup_$dateStr.vzbackup';
+
+      // We use XFile to share the content as a file
+      final file = XFile.fromData(
+        utf8.encode(jsonContent),
+        name: filename,
+        mimeType: 'application/json',
+      );
+      await SharePlus.instance.share(ShareParams(files: [file], text: 'Vault Zero Backup'));
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Backup failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _handleRestore() async {
+    FilePickerResult? result;
+    try {
+      result = await FilePicker.pickFiles(
+        type: FileType.any,
+      );
+    } catch (e) {
+      // Ignored
+    }
+
+    if (result != null && result.files.single.path != null) {
+      final file = File(result.files.single.path!);
+      final content = await file.readAsString();
+
+      VaultBackup? backup;
+      try {
+        backup = VaultBackup.fromJson(jsonDecode(content) as Map<String, dynamic>);
+      } catch (e) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Invalid backup file: $e')),
+        );
+        return;
+      }
+
+      if (!mounted) return;
+
+      final confirmed = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Restore Vault?'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Backup Created On: ${DateFormat.yMMMd().format(backup!.exportDate)}'),
+              const SizedBox(height: 8),
+              Text('Databases: ${backup.databases.length}'),
+              Text('Records: ${backup.records.length}'),
+              const SizedBox(height: 16),
+              const Text(
+                'WARNING: Restoring will permanently replace your current Vault. This action cannot be undone.',
+                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text('CANCEL'),
+            ),
+            FilledButton.tonal(
+              style: FilledButton.styleFrom(
+                foregroundColor: Theme.of(context).colorScheme.onError,
+                backgroundColor: Theme.of(context).colorScheme.error,
+              ),
+              onPressed: () => Navigator.of(context).pop(true),
+              child: const Text('RESTORE'),
+            ),
+          ],
+        ),
+      );
+
+      if (confirmed == true) {
+        setState(() => _isLoading = true);
+        try {
+          final service = await ref.read(backupRestoreServiceProvider.future);
+          await service.restoreVault(content);
+          
+          // Refresh UI
+          ref.invalidate(schemaRepositoryProvider);
+          ref.invalidate(recordRepositoryProvider);
+          
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Vault restored successfully.')),
+            );
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Restore failed: $e')),
+            );
+          }
+        } finally {
+          if (mounted) setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Settings'),
+      ),
+      body: Stack(
+        children: [
+          ListView(
+            children: [
+              const ListTile(
+                title: Text('Data Management', style: TextStyle(fontWeight: FontWeight.bold)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.backup),
+                title: const Text('Backup Vault'),
+                subtitle: const Text('Export a copy of your V2 database'),
+                onTap: _handleBackup,
+              ),
+              ListTile(
+                leading: const Icon(Icons.restore),
+                title: const Text('Restore Vault'),
+                subtitle: const Text('Replace current data with a backup'),
+                onTap: _handleRestore,
+              ),
+            ],
+          ),
+          if (_isLoading)
+            const Center(
+              child: CircularProgressIndicator(),
+            ),
+        ],
+      ),
+    );
+  }
+}

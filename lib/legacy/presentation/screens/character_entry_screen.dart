@@ -368,7 +368,7 @@ class _CharacterEntryScreenState extends ConsumerState<CharacterEntryScreen> {
                   onPressed: isExporting ? null : () async {
                     final file = await ref.read(exportControllerProvider.notifier).exportToExcel();
                     if (file != null && mounted) {
-                      await Share.shareXFiles([XFile(file.path)], text: 'Vault Zero Export');
+                      await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Vault Zero Export'));
                       if (mounted) showMessage('Export Complete!');
                     }
                   },

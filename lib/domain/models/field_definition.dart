@@ -65,4 +65,46 @@ class FieldDefinition {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'databaseId': databaseId,
+      'name': name,
+      'type': type.name,
+      'position': position,
+      'isRequired': isRequired,
+      if (configuration is ChoiceConfig)
+        'configuration': {
+          'type': 'choice',
+          'options': (configuration as ChoiceConfig).options,
+        },
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'updatedAt': updatedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  factory FieldDefinition.fromJson(Map<String, dynamic> json) {
+    FieldConfig? config;
+    if (json['configuration'] != null) {
+      final configJson = json['configuration'] as Map<String, dynamic>;
+      if (configJson['type'] == 'choice') {
+        config = ChoiceConfig(
+          options: (configJson['options'] as List).cast<String>(),
+        );
+      }
+    }
+
+    return FieldDefinition(
+      id: json['id'] as String,
+      databaseId: json['databaseId'] as String,
+      name: json['name'] as String,
+      type: FieldType.values.firstWhere((e) => e.name == json['type']),
+      position: json['position'] as int,
+      isRequired: json['isRequired'] as bool? ?? false,
+      configuration: config,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
 }

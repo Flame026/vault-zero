@@ -59,7 +59,7 @@ class RecordListScreen extends ConsumerWidget {
     try {
       final file = await ref.read(v2ExportControllerProvider.notifier).exportToExcel(database, fields);
       if (file != null) {
-        await Share.shareXFiles([XFile(file.path)], text: 'Vault Zero Export: ${database.name}');
+        await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Vault Zero Export: ${database.name}'));
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Export Complete!')),

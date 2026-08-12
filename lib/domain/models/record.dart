@@ -30,4 +30,27 @@ class Record {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'databaseId': databaseId,
+      'values': values.map((k, v) => MapEntry(k, v.toJson())),
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'updatedAt': updatedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  factory Record.fromJson(Map<String, dynamic> json) {
+    final valuesMap = (json['values'] as Map<String, dynamic>).map(
+      (k, v) => MapEntry(k, FieldValue.fromJson(v as Map<String, dynamic>)),
+    );
+    return Record(
+      id: json['id'] as String,
+      databaseId: json['databaseId'] as String,
+      values: valuesMap,
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
 }

@@ -34,4 +34,28 @@ class DatabaseDefinition {
       updatedAt: updatedAt ?? this.updatedAt,
     );
   }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'id': id,
+      'name': name,
+      'description': description,
+      'fields': fields.map((f) => f.toJson()).toList(),
+      'createdAt': createdAt.toUtc().toIso8601String(),
+      'updatedAt': updatedAt.toUtc().toIso8601String(),
+    };
+  }
+
+  factory DatabaseDefinition.fromJson(Map<String, dynamic> json) {
+    return DatabaseDefinition(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      description: json['description'] as String,
+      fields: (json['fields'] as List)
+          .map((f) => FieldDefinition.fromJson(f as Map<String, dynamic>))
+          .toList(),
+      createdAt: DateTime.parse(json['createdAt'] as String),
+      updatedAt: DateTime.parse(json['updatedAt'] as String),
+    );
+  }
 }
