@@ -67,14 +67,14 @@ class FieldCard extends StatelessWidget {
         padding: const EdgeInsets.all(12.0),
         child: Row(
           children: [
-            const ReorderableDragStartListener(
+            ReorderableDragStartListener(
               index: 0, // This gets overridden by the ListView, but we supply it anyway. Wait, ReorderableDragStartListener needs the actual index.
               // Actually, ReorderableListView handles dragging via the drag handle automatically if we use ReorderableDragStartListener, but it's easier to just let ReorderableListView handle it by default, or provide an explicit handle.
               // We'll replace ReorderableDragStartListener with an Icon, and ReorderableListView will make the whole card draggable, or we can use ReorderableDragStartListener around a handle.
               // We'll just provide a drag handle icon visually. The framework handles dragging on long-press.
               child: Padding(
-                padding: EdgeInsets.all(8.0),
-                child: Icon(Icons.drag_indicator, color: Colors.grey),
+                padding: const EdgeInsets.all(8.0),
+                child: Icon(Icons.drag_indicator, color: colorScheme.onSurfaceVariant),
               ),
             ),
             Container(
@@ -155,13 +155,13 @@ class FieldCard extends StatelessWidget {
                     ],
                   ),
                 ),
-                const PopupMenuItem(
+                PopupMenuItem(
                   value: 'delete',
                   child: Row(
                     children: [
-                      Icon(Icons.delete_rounded, size: 20, color: Colors.red),
-                      SizedBox(width: 12),
-                      Text('Delete', style: TextStyle(color: Colors.red)),
+                      Icon(Icons.delete_rounded, size: 20, color: colorScheme.error),
+                      const SizedBox(width: 12),
+                      Text('Delete', style: TextStyle(color: colorScheme.error)),
                     ],
                   ),
                 ),

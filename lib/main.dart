@@ -147,7 +147,7 @@ class VaultZeroSplashScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFF0B1019),
+      color: Theme.of(context).scaffoldBackgroundColor,
       child: SizedBox.expand(
         child: Image.asset(
           'assets/branding/vault_zero_splash.png',

@@ -48,59 +48,64 @@ class FieldListScreen extends ConsumerWidget {
       appBar: AppBar(
         title: Text('${database.name} Fields'),
       ),
-      body: state.when(
-        data: (fields) {
-          if (fields.isEmpty) {
-            return _buildEmptyState(context);
-          }
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(fieldListControllerProvider(database.id));
-            },
-            child: ReorderableListView.builder(
-              padding: const EdgeInsets.all(16),
-              itemCount: fields.length,
-              onReorderItem: (oldIndex, newIndex) {
-                ref.read(fieldListControllerProvider(database.id).notifier).reorderFields(oldIndex, newIndex);
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: state.when(
+          data: (fields) {
+            if (fields.isEmpty) {
+              return _buildEmptyState(context);
+            }
+            return RefreshIndicator(
+              key: const ValueKey('data'),
+              onRefresh: () async {
+                ref.invalidate(fieldListControllerProvider(database.id));
               },
-              itemBuilder: (context, index) {
-                final field = fields[index];
-                return Padding(
-                  key: ValueKey(field.id),
-                  padding: const EdgeInsets.only(bottom: 12),
-                  child: FieldCard(
-                    field: field,
-                    onEdit: () => _showEditScreen(context, field),
-                    onDelete: () => _showDeleteDialog(context, ref, field),
+              child: ReorderableListView.builder(
+                padding: const EdgeInsets.all(16),
+                itemCount: fields.length,
+                onReorderItem: (oldIndex, newIndex) {
+                  ref.read(fieldListControllerProvider(database.id).notifier).reorderFields(oldIndex, newIndex);
+                },
+                itemBuilder: (context, index) {
+                  final field = fields[index];
+                  return Padding(
+                    key: ValueKey(field.id),
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: FieldCard(
+                      field: field,
+                      onEdit: () => _showEditScreen(context, field),
+                      onDelete: () => _showDeleteDialog(context, ref, field),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+          loading: () => const Center(key: ValueKey('loading'), child: CircularProgressIndicator()),
+          error: (error, stack) => Center(
+            key: const ValueKey('error'),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+                  const SizedBox(height: 16),
+                  Text('Failed to load fields', style: theme.textTheme.titleLarge),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+                    textAlign: TextAlign.center,
                   ),
-                );
-              },
-            ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: colorScheme.error),
-                const SizedBox(height: 16),
-                Text('Failed to load fields', style: theme.textTheme.titleLarge),
-                const SizedBox(height: 8),
-                Text(
-                  error.toString(),
-                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () => ref.invalidate(fieldListControllerProvider(database.id)),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                ),
-              ],
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => ref.invalidate(fieldListControllerProvider(database.id)),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -118,6 +123,7 @@ class FieldListScreen extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     
     return Center(
+      key: const ValueKey('empty'),
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(

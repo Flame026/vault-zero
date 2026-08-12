@@ -100,28 +100,42 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
         title: Text(isEditing ? 'Edit Record' : 'New Record'),
         actions: [
           TextButton(
-            onPressed: _onSave,
-            child: const Text('Save'),
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(width: 8),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+            child: FilledButton(
+              style: FilledButton.styleFrom(
+                minimumSize: const Size(64, 36),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+              ),
+              onPressed: _onSave,
+              child: const Text('Save'),
+            ),
+          ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView.builder(
-          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-          padding: const EdgeInsets.all(16),
-          itemCount: widget.fields.length,
-          itemBuilder: (context, index) {
-            final field = widget.fields[index];
-            final isLast = index == widget.fields.length - 1;
-            
-            return Padding(
-              padding: const EdgeInsets.only(bottom: 24),
-              child: TextFormField(
+      body: GestureDetector(
+        onTap: () => FocusScope.of(context).unfocus(),
+        behavior: HitTestBehavior.translucent,
+        child: Form(
+          key: _formKey,
+          child: ListView.builder(
+            keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+            padding: const EdgeInsets.all(16),
+            itemCount: widget.fields.length,
+            itemBuilder: (context, index) {
+              final field = widget.fields[index];
+              final isLast = index == widget.fields.length - 1;
+
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 24),
+                child: TextFormField(
                 controller: _controllers[index],
                 focusNode: _focusNodes[index],
                 autofocus: index == 0,
+                keyboardType: TextInputType.text,
                 textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
                 textCapitalization: TextCapitalization.sentences,
                 decoration: InputDecoration(
@@ -145,6 +159,7 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
           },
         ),
       ),
+    ),
     );
   }
 }

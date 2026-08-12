@@ -135,54 +135,70 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
           ),
         ],
       ),
-      body: fieldsState.when(
-        data: (fields) {
-          if (fields.isEmpty) {
-            return _buildNoFieldsState(context, colorScheme, theme);
-          }
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: fieldsState.when(
+          data: (fields) {
+            if (fields.isEmpty) {
+              return _buildNoFieldsState(context, colorScheme, theme);
+            }
 
-          return recordsState.when(
-            data: (records) {
-              if (records.isEmpty) {
-                return _buildNoRecordsState(context, colorScheme, theme, fields);
-              }
-              return RefreshIndicator(
-                onRefresh: () async {
-                  ref.invalidate(recordListControllerProvider(widget.database.id));
+            return AnimatedSwitcher(
+              duration: const Duration(milliseconds: 300),
+              child: recordsState.when(
+                data: (records) {
+                  if (records.isEmpty) {
+                    return _buildNoRecordsState(context, colorScheme, theme, fields);
+                  }
+                  return RefreshIndicator(
+                    key: const ValueKey('data'),
+                    onRefresh: () async {
+                      ref.invalidate(recordListControllerProvider(widget.database.id));
+                    },
+                    child: ListView.builder(
+                      controller: _scrollController,
+                      physics: const AlwaysScrollableScrollPhysics(),
+                      padding: const EdgeInsets.all(16),
+                      itemCount: records.length + (isFetchingMore ? 1 : 0),
+                      itemBuilder: (context, index) {
+                        if (index == records.length) {
+                          return const SafeArea(
+                            top: false,
+                            child: Padding(
+                              padding: EdgeInsets.symmetric(vertical: 32),
+                              child: Center(
+                                child: SizedBox(
+                                  width: 32,
+                                  height: 32,
+                                  child: CircularProgressIndicator(strokeWidth: 3),
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        final record = records[index];
+                        return Padding(
+                          key: ValueKey(record.id),
+                          padding: const EdgeInsets.only(bottom: 12),
+                          child: RecordCard(
+                            record: record,
+                            fields: fields,
+                            onTap: () => _showEditScreen(context, record, fields),
+                            onDelete: () => _showDeleteDialog(context, ref, record),
+                          ),
+                        );
+                      },
+                    ),
+                  );
                 },
-                child: ListView.builder(
-                  controller: _scrollController,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(16),
-                  itemCount: records.length + (isFetchingMore ? 1 : 0),
-                  itemBuilder: (context, index) {
-                    if (index == records.length) {
-                      return const Padding(
-                        padding: EdgeInsets.symmetric(vertical: 16),
-                        child: Center(child: CircularProgressIndicator()),
-                      );
-                    }
-                    final record = records[index];
-                    return Padding(
-                      key: ValueKey(record.id),
-                      padding: const EdgeInsets.only(bottom: 12),
-                      child: RecordCard(
-                        record: record,
-                        fields: fields,
-                        onTap: () => _showEditScreen(context, record, fields),
-                        onDelete: () => _showDeleteDialog(context, ref, record),
-                      ),
-                    );
-                  },
-                ),
-              );
-            },
-            loading: () => const Center(child: CircularProgressIndicator()),
-            error: (err, st) => _buildErrorState(context, ref, err, theme, colorScheme),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (err, st) => _buildErrorState(context, ref, err, theme, colorScheme),
+                loading: () => const Center(key: ValueKey('loading_records'), child: CircularProgressIndicator()),
+                error: (err, st) => _buildErrorState(context, ref, err, theme, colorScheme),
+              ),
+            );
+          },
+          loading: () => const Center(key: ValueKey('loading_fields'), child: CircularProgressIndicator()),
+          error: (err, st) => _buildErrorState(context, ref, err, theme, colorScheme),
+        ),
       ),
       floatingActionButton: fieldsState.maybeWhen(
         data: (fields) => fields.isNotEmpty
@@ -199,6 +215,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
 
   Widget _buildNoFieldsState(BuildContext context, ColorScheme colorScheme, ThemeData theme) {
     return Center(
+      key: const ValueKey('no_fields'),
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(
@@ -227,6 +244,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
 
   Widget _buildNoRecordsState(BuildContext context, ColorScheme colorScheme, ThemeData theme, fields) {
     return Center(
+      key: const ValueKey('no_records'),
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(
@@ -249,6 +267,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
 
   Widget _buildErrorState(BuildContext context, WidgetRef ref, Object error, ThemeData theme, ColorScheme colorScheme) {
     return Center(
+      key: const ValueKey('error'),
       child: Padding(
         padding: const EdgeInsets.all(24.0),
         child: Column(

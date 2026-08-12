@@ -83,20 +83,19 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text('Backup Created On: ${DateFormat.yMMMd().format(backup!.exportDate)}'),
-              const SizedBox(height: 8),
               Text('Databases: ${backup.databases.length}'),
               Text('Records: ${backup.records.length}'),
               const SizedBox(height: 16),
-              const Text(
+              Text(
                 'WARNING: Restoring will permanently replace your current Vault. This action cannot be undone.',
-                style: TextStyle(fontWeight: FontWeight.bold, color: Colors.red),
+                style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.error),
               ),
             ],
           ),
           actions: [
             TextButton(
               onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('CANCEL'),
+              child: const Text('Cancel'),
             ),
             FilledButton.tonal(
               style: FilledButton.styleFrom(
@@ -104,7 +103,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 backgroundColor: Theme.of(context).colorScheme.error,
               ),
               onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('RESTORE'),
+              child: const Text('Restore'),
             ),
           ],
         ),
@@ -148,6 +147,10 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         children: [
           ListView(
             children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text('DATA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+              ),
               const ListTile(
                 title: Text('Data Management', style: TextStyle(fontWeight: FontWeight.bold)),
               ),

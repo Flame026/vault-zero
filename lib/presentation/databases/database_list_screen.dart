@@ -73,71 +73,76 @@ class DatabaseListScreen extends ConsumerWidget {
           ),
         ],
       ),
-      body: state.when(
-        data: (databases) {
-          if (databases.isEmpty) {
-            return _buildEmptyState(context, ref);
-          }
-          return RefreshIndicator(
-            onRefresh: () async {
-              // AsyncValue.guard handles loading, but RefreshIndicator expects a Future
-              ref.invalidate(databaseListControllerProvider);
-            },
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: databases.length,
-              separatorBuilder: (context, index) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                final db = databases[index];
-                return DatabaseCard(
-                  database: db,
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => RecordListScreen(database: db),
-                      ),
-                    );
-                  },
-                  onManageFields: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (context) => FieldListScreen(database: db),
-                      ),
-                    );
-                  },
-                  onEdit: () => _showEditDialog(context, ref, db),
-                  onDelete: () => _showDeleteDialog(context, ref, db),
-                );
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        child: state.when(
+          data: (databases) {
+            if (databases.isEmpty) {
+              return _buildEmptyState(context, ref);
+            }
+            return RefreshIndicator(
+              key: const ValueKey('data'),
+              onRefresh: () async {
+                // AsyncValue.guard handles loading, but RefreshIndicator expects a Future
+                ref.invalidate(databaseListControllerProvider);
               },
-            ),
-          );
-        },
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (error, stack) => Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 64, color: colorScheme.error),
-                const SizedBox(height: 16),
-                Text(
-                  'Failed to load databases',
-                  style: theme.textTheme.titleLarge,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  error.toString(),
-                  style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                FilledButton.icon(
-                  onPressed: () => ref.invalidate(databaseListControllerProvider),
-                  icon: const Icon(Icons.refresh),
-                  label: const Text('Retry'),
-                ),
-              ],
+              child: ListView.separated(
+                padding: const EdgeInsets.all(16),
+                itemCount: databases.length,
+                separatorBuilder: (context, index) => const SizedBox(height: 12),
+                itemBuilder: (context, index) {
+                  final db = databases[index];
+                  return DatabaseCard(
+                    database: db,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => RecordListScreen(database: db),
+                        ),
+                      );
+                    },
+                    onManageFields: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => FieldListScreen(database: db),
+                        ),
+                      );
+                    },
+                    onEdit: () => _showEditDialog(context, ref, db),
+                    onDelete: () => _showDeleteDialog(context, ref, db),
+                  );
+                },
+              ),
+            );
+          },
+          loading: () => const Center(key: ValueKey('loading'), child: CircularProgressIndicator()),
+          error: (error, stack) => Center(
+            key: const ValueKey('error'),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Failed to load databases',
+                    style: theme.textTheme.titleLarge,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    error.toString(),
+                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 24),
+                  FilledButton.icon(
+                    onPressed: () => ref.invalidate(databaseListControllerProvider),
+                    icon: const Icon(Icons.refresh),
+                    label: const Text('Retry'),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -155,6 +160,7 @@ class DatabaseListScreen extends ConsumerWidget {
     final colorScheme = theme.colorScheme;
     
     return Center(
+      key: const ValueKey('empty'),
       child: Padding(
         padding: const EdgeInsets.all(32.0),
         child: Column(

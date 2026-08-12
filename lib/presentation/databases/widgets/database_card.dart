@@ -112,13 +112,13 @@ class DatabaseCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const PopupMenuItem(
+                      PopupMenuItem(
                         value: 'delete',
                         child: Row(
                           children: [
-                            Icon(Icons.delete_rounded, size: 20, color: Colors.red),
-                            SizedBox(width: 12),
-                            Text('Delete', style: TextStyle(color: Colors.red)),
+                            Icon(Icons.delete_rounded, size: 20, color: colorScheme.error),
+                            const SizedBox(width: 12),
+                            Text('Delete', style: TextStyle(color: colorScheme.error)),
                           ],
                         ),
                       ),
