@@ -109,6 +109,7 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
       body: Form(
         key: _formKey,
         child: ListView.builder(
+          keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
           padding: const EdgeInsets.all(16),
           itemCount: widget.fields.length,
           itemBuilder: (context, index) {

@@ -120,24 +120,52 @@ void main() {
     expect(controller.isNameUnique('New Field'), true);
   });
 
-  test('Field reordering works', () async {
+  test('Field reordering works comprehensively', () async {
     final controller = container.read(fieldListControllerProvider(testDbId).notifier);
     await container.read(fieldListControllerProvider(testDbId).future);
 
     await controller.createField(name: 'A', type: FieldType.text, isRequired: false);
     await controller.createField(name: 'B', type: FieldType.text, isRequired: false);
     await controller.createField(name: 'C', type: FieldType.text, isRequired: false);
+    await controller.createField(name: 'D', type: FieldType.text, isRequired: false);
+    await controller.createField(name: 'E', type: FieldType.text, isRequired: false);
 
-    // Initial: A=0, B=1, C=2
-    // Move A(0) below C(2) -> newIndex=2 (adjusted by onReorderItem)
-    await controller.reorderFields(0, 2);
-    
-    // Allow microtasks and background sync to settle
+    // Initial: A=0, B=1, C=2, D=3, E=4
+
+    // 1. Moving an item downward: Move B(1) below C(2). ReorderableListView gives newIndex=3
+    await controller.reorderFields(1, 3);
     await Future.delayed(Duration.zero);
-    
-    final state = await container.read(fieldListControllerProvider(testDbId).future);
-    expect(state[0].name, 'B'); // new pos 0
-    expect(state[1].name, 'C'); // new pos 1
-    expect(state[2].name, 'A'); // new pos 2
+    var state = await container.read(fieldListControllerProvider(testDbId).future);
+    expect(state.map((e) => e.name).toList(), ['A', 'C', 'B', 'D', 'E']);
+    for (int i = 0; i < state.length; i++) {
+      expect(state[i].position, i);
+    }
+
+    // 2. Moving an item upward: Move D(3) above C(1). ReorderableListView gives newIndex=1
+    await controller.reorderFields(3, 1);
+    await Future.delayed(Duration.zero);
+    state = await container.read(fieldListControllerProvider(testDbId).future);
+    expect(state.map((e) => e.name).toList(), ['A', 'D', 'C', 'B', 'E']);
+    for (int i = 0; i < state.length; i++) {
+      expect(state[i].position, i);
+    }
+
+    // 3. Moving first -> last: Move A(0) below E(4). ReorderableListView gives newIndex=5
+    await controller.reorderFields(0, 5);
+    await Future.delayed(Duration.zero);
+    state = await container.read(fieldListControllerProvider(testDbId).future);
+    expect(state.map((e) => e.name).toList(), ['D', 'C', 'B', 'E', 'A']);
+    for (int i = 0; i < state.length; i++) {
+      expect(state[i].position, i);
+    }
+
+    // 4. Moving last -> first: Move A(4) above D(0). ReorderableListView gives newIndex=0
+    await controller.reorderFields(4, 0);
+    await Future.delayed(Duration.zero);
+    state = await container.read(fieldListControllerProvider(testDbId).future);
+    expect(state.map((e) => e.name).toList(), ['A', 'D', 'C', 'B', 'E']);
+    for (int i = 0; i < state.length; i++) {
+      expect(state[i].position, i);
+    }
   });
 }

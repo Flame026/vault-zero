@@ -92,6 +92,9 @@ class FieldListController extends FamilyAsyncNotifier<List<FieldDefinition>, Str
   }
 
   Future<void> reorderFields(int oldIndex, int newIndex) async {
+    if (oldIndex < newIndex) {
+      newIndex -= 1;
+    }
     if (oldIndex == newIndex) return;
 
     final currentFields = state.valueOrNull?.toList();
