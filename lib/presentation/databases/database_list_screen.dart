@@ -86,30 +86,71 @@ class DatabaseListScreen extends ConsumerWidget {
                 // AsyncValue.guard handles loading, but RefreshIndicator expects a Future
                 ref.invalidate(databaseListControllerProvider);
               },
-              child: ListView.separated(
-                padding: const EdgeInsets.all(16),
-                itemCount: databases.length,
-                separatorBuilder: (context, index) => const SizedBox(height: 12),
-                itemBuilder: (context, index) {
-                  final db = databases[index];
-                  return DatabaseCard(
-                    database: db,
-                    onTap: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => RecordListScreen(database: db),
-                        ),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final isWide = constraints.maxWidth >= 600;
+
+                  if (isWide) {
+                    return GridView.builder(
+                      padding: const EdgeInsets.all(16),
+                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 400,
+                        mainAxisExtent: 104,
+                        crossAxisSpacing: 16,
+                        mainAxisSpacing: 16,
+                      ),
+                      itemCount: databases.length,
+                      itemBuilder: (context, index) {
+                        final db = databases[index];
+                        return DatabaseCard(
+                          database: db,
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => RecordListScreen(database: db),
+                              ),
+                            );
+                          },
+                          onManageFields: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (context) => FieldListScreen(database: db),
+                              ),
+                            );
+                          },
+                          onEdit: () => _showEditDialog(context, ref, db),
+                          onDelete: () => _showDeleteDialog(context, ref, db),
+                        );
+                      },
+                    );
+                  }
+
+                  return ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: databases.length,
+                    separatorBuilder: (context, index) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final db = databases[index];
+                      return DatabaseCard(
+                        database: db,
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => RecordListScreen(database: db),
+                            ),
+                          );
+                        },
+                        onManageFields: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (context) => FieldListScreen(database: db),
+                            ),
+                          );
+                        },
+                        onEdit: () => _showEditDialog(context, ref, db),
+                        onDelete: () => _showDeleteDialog(context, ref, db),
                       );
                     },
-                    onManageFields: () {
-                      Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (context) => FieldListScreen(database: db),
-                        ),
-                      );
-                    },
-                    onEdit: () => _showEditDialog(context, ref, db),
-                    onDelete: () => _showDeleteDialog(context, ref, db),
                   );
                 },
               ),

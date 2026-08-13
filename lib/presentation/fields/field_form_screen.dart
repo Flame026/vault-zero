@@ -72,9 +72,13 @@ class _FieldFormScreenState extends ConsumerState<FieldFormScreen> {
           ),
         ],
       ),
-      body: Form(
-        key: _formKey,
-        child: ListView(
+      body: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 600),
+          child: Form(
+            key: _formKey,
+            child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
             TextFormField(
@@ -109,7 +113,9 @@ class _FieldFormScreenState extends ConsumerState<FieldFormScreen> {
             ),
           ],
         ),
-      ),
+            ),
+          ),
+        ),
     );
   }
 }

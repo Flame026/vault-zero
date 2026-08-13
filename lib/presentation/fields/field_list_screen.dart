@@ -60,7 +60,11 @@ class FieldListScreen extends ConsumerWidget {
               onRefresh: () async {
                 ref.invalidate(fieldListControllerProvider(database.id));
               },
-              child: ReorderableListView.builder(
+              child: Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 700),
+                  child: ReorderableListView.builder(
                 padding: const EdgeInsets.all(16),
                 itemCount: fields.length,
                 onReorderItem: (oldIndex, newIndex) {
@@ -78,6 +82,8 @@ class FieldListScreen extends ConsumerWidget {
                     ),
                   );
                 },
+              ),
+                ),
               ),
             );
           },

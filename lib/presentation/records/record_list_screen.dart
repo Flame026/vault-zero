@@ -155,37 +155,79 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
                     onRefresh: () async {
                       ref.invalidate(recordListControllerProvider(widget.database.id));
                     },
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(16),
-                      itemCount: records.length + (isFetchingMore ? 1 : 0),
-                      itemBuilder: (context, index) {
-                        if (index == records.length) {
-                          return const SafeArea(
-                            top: false,
-                            child: Padding(
-                              padding: EdgeInsets.symmetric(vertical: 32),
-                              child: Center(
-                                child: SizedBox(
-                                  width: 32,
-                                  height: 32,
-                                  child: CircularProgressIndicator(strokeWidth: 3),
-                                ),
-                              ),
+                    child: LayoutBuilder(
+                      builder: (context, constraints) {
+                        final isWide = constraints.maxWidth >= 600;
+
+                        if (isWide) {
+                          return GridView.builder(
+                            controller: _scrollController,
+                            physics: const AlwaysScrollableScrollPhysics(),
+                            padding: const EdgeInsets.all(16),
+                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 400,
+                              mainAxisExtent: 96,
+                              crossAxisSpacing: 16,
+                              mainAxisSpacing: 16,
                             ),
+                            itemCount: records.length + (isFetchingMore ? 1 : 0),
+                            itemBuilder: (context, index) {
+                              if (index == records.length) {
+                                return const SafeArea(
+                                  top: false,
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: CircularProgressIndicator(strokeWidth: 3),
+                                    ),
+                                  ),
+                                );
+                              }
+                              final record = records[index];
+                              return RecordCard(
+                                record: record,
+                                fields: fields,
+                                onTap: () => _showEditScreen(context, record, fields),
+                                onDelete: () => _showDeleteDialog(context, ref, record),
+                              );
+                            },
                           );
                         }
-                        final record = records[index];
-                        return Padding(
-                          key: ValueKey(record.id),
-                          padding: const EdgeInsets.only(bottom: 12),
-                          child: RecordCard(
-                            record: record,
-                            fields: fields,
-                            onTap: () => _showEditScreen(context, record, fields),
-                            onDelete: () => _showDeleteDialog(context, ref, record),
-                          ),
+
+                        return ListView.builder(
+                          controller: _scrollController,
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.all(16),
+                          itemCount: records.length + (isFetchingMore ? 1 : 0),
+                          itemBuilder: (context, index) {
+                            if (index == records.length) {
+                              return const SafeArea(
+                                top: false,
+                                child: Padding(
+                                  padding: EdgeInsets.symmetric(vertical: 32),
+                                  child: Center(
+                                    child: SizedBox(
+                                      width: 32,
+                                      height: 32,
+                                      child: CircularProgressIndicator(strokeWidth: 3),
+                                    ),
+                                  ),
+                                ),
+                              );
+                            }
+                            final record = records[index];
+                            return Padding(
+                              key: ValueKey(record.id),
+                              padding: const EdgeInsets.only(bottom: 12),
+                              child: RecordCard(
+                                record: record,
+                                fields: fields,
+                                onTap: () => _showEditScreen(context, record, fields),
+                                onDelete: () => _showDeleteDialog(context, ref, record),
+                              ),
+                            );
+                          },
                         );
                       },
                     ),

@@ -145,7 +145,11 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
       ),
       body: Stack(
         children: [
-          ListView(
+          Align(
+            alignment: Alignment.topCenter,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 600),
+              child: ListView(
             children: [
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
@@ -167,6 +171,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 onTap: _handleRestore,
               ),
             ],
+          ),
+            ),
           ),
           if (_isLoading)
             const Center(

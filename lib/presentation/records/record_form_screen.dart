@@ -119,8 +119,12 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
       body: GestureDetector(
         onTap: () => FocusScope.of(context).unfocus(),
         behavior: HitTestBehavior.translucent,
-        child: Form(
-          key: _formKey,
+        child: Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 600),
+            child: Form(
+              key: _formKey,
           child: ListView.builder(
             keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
             padding: const EdgeInsets.all(16),
@@ -158,8 +162,10 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
             );
           },
         ),
-      ),
-    ),
-    );
+              ),
+            ),
+          ),
+        ),
+      );
   }
 }
