@@ -11,6 +11,7 @@ import '../../core/providers.dart';
 import '../../core/theme/theme_preset.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../domain/models/vault_backup.dart';
+import '../import/csv_preview_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -225,6 +226,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 title: const Text('Restore Vault'),
                 subtitle: const Text('Replace current data with a backup'),
                 onTap: _handleRestore,
+              ),
+              ListTile(
+                leading: const Icon(Icons.table_view),
+                title: const Text('Import CSV'),
+                subtitle: const Text('Import a CSV file into a new database'),
+                onTap: () async {
+                  FilePickerResult? result;
+                  try {
+                    result = await FilePicker.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['csv'],
+                    );
+                  } catch (e) {
+                    // Ignored
+                  }
+                  if (result != null && result.files.single.path != null && context.mounted) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => CsvPreviewScreen(
+                          filePath: result!.files.single.path!,
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
             ],
           ),

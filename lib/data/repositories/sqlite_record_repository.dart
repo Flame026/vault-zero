@@ -104,6 +104,100 @@ class SqliteRecordRepository implements RecordRepository {
   }
 
   @override
+  Future<void> saveRecordsBatch(List<Record> records) async {
+    if (records.isEmpty) return;
+
+    await db.transaction((txn) async {
+      // Group records by databaseId to validate fields efficiently
+      final dbIds = records.map((r) => r.databaseId).toSet();
+      final Map<String, Map<String, FieldType>> cachedDbFields = {};
+
+      for (final dbId in dbIds) {
+        final fields = await txn.query(
+          'fields',
+          where: 'database_id = ?',
+          whereArgs: [dbId],
+        );
+        cachedDbFields[dbId] = {
+          for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+        };
+      }
+
+      final batch = txn.batch();
+
+      for (final record in records) {
+        batch.insert(
+          'records',
+          {
+            'id': record.id,
+            'database_id': record.databaseId,
+            'created_at': record.createdAt.millisecondsSinceEpoch,
+            'updated_at': record.updatedAt.millisecondsSinceEpoch,
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
+
+        final dbFields = cachedDbFields[record.databaseId]!;
+
+        for (final valueEntry in record.values.entries) {
+          final fieldId = valueEntry.key;
+          final fieldValue = valueEntry.value;
+
+          // Validation 1: Field belongs to the database
+          if (!dbFields.containsKey(fieldId)) {
+            throw ArgumentError('Field $fieldId does not belong to database ${record.databaseId}');
+          }
+
+          // Validation 2: Field value matches field type
+          if (fieldValue.fieldType != dbFields[fieldId]) {
+            throw ArgumentError('Type mismatch for field $fieldId. Expected ${dbFields[fieldId]}, got ${fieldValue.fieldType}');
+          }
+
+          final Map<String, dynamic> valueRow = {
+            'id': fieldValue.id,
+            'record_id': record.id,
+            'field_id': fieldId,
+            'text_value': null,
+            'integer_value': null,
+            'decimal_value': null,
+            'boolean_value': null,
+            'date_value': null,
+            'date_time_value': null,
+            'choice_value': null,
+          };
+
+          // Populate exactly ONE value column
+          if (fieldValue is TextFieldValue) {
+            valueRow['text_value'] = fieldValue.value;
+          } else if (fieldValue is LongTextFieldValue) {
+            valueRow['text_value'] = fieldValue.value;
+          } else if (fieldValue is IntegerFieldValue) {
+            valueRow['integer_value'] = fieldValue.value;
+          } else if (fieldValue is DecimalFieldValue) {
+            valueRow['decimal_value'] = fieldValue.value;
+          } else if (fieldValue is BooleanFieldValue) {
+            valueRow['boolean_value'] = fieldValue.value ? 1 : 0;
+          } else if (fieldValue is DateFieldValue) {
+            valueRow['date_value'] = fieldValue.value.millisecondsSinceEpoch;
+          } else if (fieldValue is DateTimeFieldValue) {
+            valueRow['date_time_value'] = fieldValue.value.millisecondsSinceEpoch;
+          } else if (fieldValue is ChoiceFieldValue) {
+            valueRow['choice_value'] = fieldValue.value;
+          }
+
+          batch.insert(
+            'field_values',
+            valueRow,
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
+        }
+      }
+
+      await batch.commit(noResult: true);
+    });
+  }
+
+  @override
   Future<void> deleteRecord(String id) async {
     await db.delete(
       'records',

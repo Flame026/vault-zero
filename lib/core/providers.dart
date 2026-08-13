@@ -6,6 +6,7 @@ import '../data/repositories/json_backup_restore_service.dart';
 import '../domain/repositories/record_repository.dart';
 import '../domain/repositories/schema_repository.dart';
 import '../domain/repositories/backup_restore_service.dart';
+import '../domain/services/import_service.dart';
 import 'database/database_provider.dart';
 
 final schemaRepositoryProvider = FutureProvider<SchemaRepository>((ref) async {
@@ -21,4 +22,13 @@ final recordRepositoryProvider = FutureProvider<RecordRepository>((ref) async {
 final backupRestoreServiceProvider = FutureProvider<BackupRestoreService>((ref) async {
   final db = await ref.watch(databaseProvider.future);
   return JsonBackupRestoreService(db);
+});
+
+final importServiceProvider = FutureProvider<ImportService>((ref) async {
+  final schemaRepo = await ref.watch(schemaRepositoryProvider.future);
+  final recordRepo = await ref.watch(recordRepositoryProvider.future);
+  return ImportService(
+    schemaRepository: schemaRepo,
+    recordRepository: recordRepo,
+  );
 });

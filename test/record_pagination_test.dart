@@ -26,6 +26,8 @@ class SpyingRecordRepository implements RecordRepository {
   @override
   Future<void> saveRecord(Record record) => delegate.saveRecord(record);
   @override
+  Future<void> saveRecordsBatch(List<Record> records) => delegate.saveRecordsBatch(records);
+  @override
   Future<void> deleteRecord(String id) => delegate.deleteRecord(id);
   @override
   Future<Record?> getRecord(String id) => delegate.getRecord(id);
