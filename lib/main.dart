@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'core/theme/app_theme.dart';
 import 'core/theme/theme_provider.dart';
 import 'presentation/databases/database_list_screen.dart';
 
@@ -40,79 +41,6 @@ class _VaultZeroAppState extends ConsumerState<VaultZeroApp> {
     super.dispose();
   }
 
-  ThemeData _buildTheme({
-    required Brightness brightness,
-    required Color seedColor,
-  }) {
-    final isDark = brightness == Brightness.dark;
-
-    final colorScheme = ColorScheme.fromSeed(
-      seedColor: seedColor,
-      brightness: brightness,
-    );
-
-    final scaffoldColor = Color.alphaBlend(
-      seedColor.withAlpha(isDark ? 18 : 9),
-      isDark ? const Color(0xFF121016) : const Color(0xFFFBF9FE),
-    );
-
-    return ThemeData(
-      colorScheme: colorScheme,
-      brightness: brightness,
-      useMaterial3: true,
-      scaffoldBackgroundColor: scaffoldColor,
-      appBarTheme: AppBarTheme(
-        centerTitle: true,
-        elevation: 0,
-        backgroundColor: scaffoldColor,
-        foregroundColor: colorScheme.onSurface,
-        titleTextStyle: TextStyle(
-          color: colorScheme.onSurface,
-          fontSize: 22,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-      inputDecorationTheme: InputDecorationTheme(
-        filled: true,
-        fillColor: colorScheme.surface,
-        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(16)),
-        enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: colorScheme.outlineVariant),
-        ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: colorScheme.primary, width: 2),
-        ),
-      ),
-      filledButtonTheme: FilledButtonThemeData(
-        style: FilledButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      outlinedButtonTheme: OutlinedButtonThemeData(
-        style: OutlinedButton.styleFrom(
-          minimumSize: const Size.fromHeight(52),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          textStyle: const TextStyle(fontWeight: FontWeight.bold),
-        ),
-      ),
-      snackBarTheme: SnackBarThemeData(
-        behavior: SnackBarBehavior.floating,
-        backgroundColor: colorScheme.inverseSurface,
-        contentTextStyle: TextStyle(color: colorScheme.onInverseSurface),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-      ),
-      bottomSheetTheme: BottomSheetThemeData(
-        backgroundColor: colorScheme.surface,
-        surfaceTintColor: colorScheme.surfaceTint,
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final themeState = ref.watch(themeProvider);
@@ -121,14 +49,8 @@ class _VaultZeroAppState extends ConsumerState<VaultZeroApp> {
       title: 'Vault Zero',
       debugShowCheckedModeBanner: false,
       themeMode: themeState.mode,
-      theme: _buildTheme(
-        brightness: Brightness.light,
-        seedColor: themeState.preset.seedColor,
-      ),
-      darkTheme: _buildTheme(
-        brightness: Brightness.dark,
-        seedColor: themeState.preset.seedColor,
-      ),
+      theme: themeState.preset.buildTheme(Brightness.light),
+      darkTheme: themeState.preset.buildTheme(Brightness.dark),
       home: AnimatedSwitcher(
         duration: const Duration(milliseconds: 320),
         switchInCurve: Curves.easeOut,
