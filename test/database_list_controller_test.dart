@@ -2,8 +2,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
-import 'package:character_collector/core/database/database_provider.dart';
-import 'package:character_collector/presentation/databases/controllers/database_list_controller.dart';
+import 'package:vault_zero/core/database/database_provider.dart';
+import 'package:vault_zero/presentation/databases/controllers/database_list_controller.dart';
 
 void main() {
   late ProviderContainer container;

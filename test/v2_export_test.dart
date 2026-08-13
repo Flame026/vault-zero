@@ -3,12 +3,12 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:character_collector/core/database/database_provider.dart';
-import 'package:character_collector/domain/models/database_definition.dart';
-import 'package:character_collector/domain/models/field_definition.dart';
-import 'package:character_collector/data/repositories/sqlite_schema_repository.dart';
-import 'package:character_collector/presentation/records/controllers/record_list_controller.dart';
-import 'package:character_collector/presentation/records/controllers/v2_export_controller.dart';
+import 'package:vault_zero/core/database/database_provider.dart';
+import 'package:vault_zero/domain/models/database_definition.dart';
+import 'package:vault_zero/domain/models/field_definition.dart';
+import 'package:vault_zero/data/repositories/sqlite_schema_repository.dart';
+import 'package:vault_zero/presentation/records/controllers/record_list_controller.dart';
+import 'package:vault_zero/presentation/records/controllers/v2_export_controller.dart';
 
 void main() {
   late ProviderContainer container;

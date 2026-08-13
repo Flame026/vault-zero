@@ -1,5 +1,5 @@
-name: character_collector
-description: "Vault Zero — a premium offline character archive."
+name: vault_zero
+description: "Vault Zero — a premium offline customizable database application."
 publish_to: 'none'
 version: 0.8.0+1
 

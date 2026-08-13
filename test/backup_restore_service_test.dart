@@ -2,7 +2,7 @@ import 'dart:convert';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
-import 'package:character_collector/data/repositories/json_backup_restore_service.dart';
+import 'package:vault_zero/data/repositories/json_backup_restore_service.dart';
 
 void main() {
   late Database db;
@@ -22,20 +22,6 @@ void main() {
           await db.execute('PRAGMA foreign_keys = ON');
         },
         onCreate: (db, version) async {
-          await db.execute('''
-            CREATE TABLE characters(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL,
-              faction TEXT NOT NULL,
-              characterClass TEXT NOT NULL,
-              title TEXT NOT NULL,
-              skill1 TEXT NOT NULL,
-              skill2 TEXT NOT NULL,
-              skill3 TEXT NOT NULL,
-              skill4 TEXT NOT NULL
-            )
-          ''');
-          
           await db.execute('''
             CREATE TABLE databases (
               id TEXT PRIMARY KEY,

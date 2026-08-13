@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:character_collector/core/preferences/preferences_repository.dart';
-import 'package:character_collector/core/theme/theme_preset.dart';
-import 'package:character_collector/core/theme/theme_provider.dart';
+import 'package:vault_zero/core/preferences/preferences_repository.dart';
+import 'package:vault_zero/core/theme/theme_preset.dart';
+import 'package:vault_zero/core/theme/theme_provider.dart';
 
 // Note: To run path_provider in unit tests without a mock platform, 
 // we typically need to mock it or use an integration test. 

@@ -8,6 +8,8 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme/theme_preset.dart';
+import '../../core/theme/theme_provider.dart';
 import '../../domain/models/vault_backup.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -19,6 +21,39 @@ class SettingsScreen extends ConsumerStatefulWidget {
 
 class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   bool _isLoading = false;
+
+  void _showThemePicker(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return SimpleDialog(
+          title: const Text('Theme Color'),
+          children: ThemePreset.values.map((preset) {
+            return SimpleDialogOption(
+              onPressed: () {
+                ref.read(themeProvider.notifier).changePreset(preset);
+                Navigator.of(context).pop();
+              },
+              child: Row(
+                children: [
+                  Container(
+                    width: 24,
+                    height: 24,
+                    decoration: BoxDecoration(
+                      color: preset.seedColor,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Text(preset.name),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
 
   Future<void> _handleBackup() async {
     setState(() => _isLoading = true);
@@ -139,6 +174,8 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final themeState = ref.watch(themeProvider);
+
     return Scaffold(
       appBar: AppBar(
         title: const Text('Settings'),
@@ -151,6 +188,25 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
               constraints: const BoxConstraints(maxWidth: 600),
               child: ListView(
             children: [
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+                child: Text('APPEARANCE', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.palette),
+                title: const Text('Theme Color'),
+                subtitle: Text(themeState.preset.name),
+                onTap: () => _showThemePicker(context, ref),
+              ),
+              SwitchListTile(
+                secondary: const Icon(Icons.dark_mode),
+                title: const Text('Dark Mode'),
+                value: themeState.mode == ThemeMode.dark,
+                onChanged: (value) {
+                  ref.read(themeProvider.notifier).changeMode(value ? ThemeMode.dark : ThemeMode.light);
+                },
+              ),
+              const Divider(),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
                 child: Text('DATA', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),

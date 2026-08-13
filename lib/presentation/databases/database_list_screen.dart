@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../../legacy/presentation/screens/character_entry_screen.dart';
 import '../fields/field_list_screen.dart';
 import '../records/record_list_screen.dart';
 import '../settings/settings_screen.dart';
@@ -41,12 +40,6 @@ class DatabaseListScreen extends ConsumerWidget {
     }
   }
 
-  void _navigateToLegacy(BuildContext context) {
-    Navigator.of(context).push(
-      MaterialPageRoute(builder: (context) => const CharacterEntryScreen()),
-    );
-  }
-
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(databaseListControllerProvider);
@@ -65,11 +58,6 @@ class DatabaseListScreen extends ConsumerWidget {
                 MaterialPageRoute(builder: (context) => const SettingsScreen()),
               );
             },
-          ),
-          IconButton(
-            icon: const Icon(Icons.history_rounded),
-            tooltip: 'Legacy Archive',
-            onPressed: () => _navigateToLegacy(context),
           ),
         ],
       ),

@@ -3,12 +3,12 @@ import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
-import 'package:character_collector/domain/models/database_definition.dart';
-import 'package:character_collector/domain/models/field_definition.dart';
-import 'package:character_collector/domain/models/field_value.dart';
-import 'package:character_collector/domain/models/record.dart';
-import 'package:character_collector/data/repositories/sqlite_schema_repository.dart';
-import 'package:character_collector/data/repositories/sqlite_record_repository.dart';
+import 'package:vault_zero/domain/models/database_definition.dart';
+import 'package:vault_zero/domain/models/field_definition.dart';
+import 'package:vault_zero/domain/models/field_value.dart';
+import 'package:vault_zero/domain/models/record.dart';
+import 'package:vault_zero/data/repositories/sqlite_schema_repository.dart';
+import 'package:vault_zero/data/repositories/sqlite_record_repository.dart';
 
 void main() {
   late Database db;
@@ -30,21 +30,6 @@ void main() {
           await db.execute('PRAGMA foreign_keys = ON');
         },
         onCreate: (db, version) async {
-          // Legacy table
-          await db.execute('''
-            CREATE TABLE characters(
-              id INTEGER PRIMARY KEY AUTOINCREMENT,
-              name TEXT NOT NULL,
-              faction TEXT NOT NULL,
-              characterClass TEXT NOT NULL,
-              title TEXT NOT NULL,
-              skill1 TEXT NOT NULL,
-              skill2 TEXT NOT NULL,
-              skill3 TEXT NOT NULL,
-              skill4 TEXT NOT NULL
-            )
-          ''');
-
           await db.execute('''
             CREATE TABLE databases (
               id TEXT PRIMARY KEY,
@@ -451,6 +436,98 @@ void main() {
       expect(fieldsCount, 0);
       expect(recordsCount, 0);
       expect(valuesCount, 0);
+    });
+  });
+
+  group('Migration', () {
+    test('V3 to V4 drops characters table but preserves generic data', () async {
+      final tempDbPath = 'migration_test.db'; // SQLite FFI handles this in the test dir
+
+      // Ensure clean state
+      if (await databaseFactory.databaseExists(tempDbPath)) {
+        await databaseFactory.deleteDatabase(tempDbPath);
+      }
+
+      // Step 1: Open at version 3 and create legacy + generic tables
+      var migrationDb = await databaseFactory.openDatabase(
+        tempDbPath,
+        options: OpenDatabaseOptions(
+          version: 3,
+          onCreate: (db, version) async {
+            await db.execute('''
+              CREATE TABLE characters(
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                faction TEXT NOT NULL,
+                characterClass TEXT NOT NULL,
+                title TEXT NOT NULL,
+                skill1 TEXT NOT NULL,
+                skill2 TEXT NOT NULL,
+                skill3 TEXT NOT NULL,
+                skill4 TEXT NOT NULL
+              )
+            ''');
+
+            await db.execute('''
+              CREATE TABLE databases (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                description TEXT NOT NULL,
+                created_at INTEGER NOT NULL,
+                updated_at INTEGER NOT NULL
+              )
+            ''');
+          },
+        ),
+      );
+
+      // Step 2: Insert representative data
+      await migrationDb.insert('characters', {
+        'name': 'Legacy Hero',
+        'faction': 'A',
+        'characterClass': 'B',
+        'title': 'C',
+        'skill1': 'D',
+        'skill2': 'E',
+        'skill3': 'F',
+        'skill4': 'G'
+      });
+      await migrationDb.insert('databases', {
+        'id': 'db1',
+        'name': 'Generic DB',
+        'description': 'Desc',
+        'created_at': 0,
+        'updated_at': 0
+      });
+      await migrationDb.close();
+
+      // Step 3: Upgrade to version 4 using the production logic
+      migrationDb = await databaseFactory.openDatabase(
+        tempDbPath,
+        options: OpenDatabaseOptions(
+          version: 4,
+          onUpgrade: (db, oldVersion, newVersion) async {
+            if (oldVersion < 4) {
+              await db.execute('DROP TABLE IF EXISTS characters');
+            }
+          },
+        ),
+      );
+
+      // Step 4: Verify the characters table no longer exists
+      final legacyTableCheck = await migrationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='characters'");
+      expect(legacyTableCheck.isEmpty, isTrue, reason: 'characters table should have been dropped during migration');
+
+      // Step 5: Verify generic tables still exist and data is intact
+      final genericTableCheck = await migrationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='databases'");
+      expect(genericTableCheck.isNotEmpty, isTrue, reason: 'databases table should still exist');
+
+      final dbData = await migrationDb.query('databases');
+      expect(dbData.length, 1);
+      expect(dbData.first['name'], 'Generic DB');
+
+      await migrationDb.close();
+      await databaseFactory.deleteDatabase(tempDbPath);
     });
   });
 }

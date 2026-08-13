@@ -7,26 +7,11 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 
   return openDatabase(
     join(dbPath, 'characters.db'),
-    version: 3,
+    version: 4,
     onConfigure: (db) async {
       await db.execute('PRAGMA foreign_keys = ON');
     },
     onCreate: (db, version) async {
-      // Legacy table required to keep old functionality intact during Phase 0
-      await db.execute('''
-        CREATE TABLE characters(
-          id INTEGER PRIMARY KEY AUTOINCREMENT,
-          name TEXT NOT NULL,
-          faction TEXT NOT NULL,
-          characterClass TEXT NOT NULL,
-          title TEXT NOT NULL,
-          skill1 TEXT NOT NULL,
-          skill2 TEXT NOT NULL,
-          skill3 TEXT NOT NULL,
-          skill4 TEXT NOT NULL
-        )
-      ''');
-      
       if (version >= 2) {
         await _createV2Tables(db);
       }
@@ -42,6 +27,10 @@ final databaseProvider = FutureProvider<Database>((ref) async {
 
       if (oldVersion < 3) {
         await db.execute('CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)');
+      }
+
+      if (oldVersion < 4) {
+        await db.execute('DROP TABLE IF EXISTS characters');
       }
     },
   );

@@ -6,7 +6,6 @@ import 'package:path_provider/path_provider.dart';
 
 class PreferencesRepository {
   static const String _preferencesFileName = 'vault_zero_preferences.json';
-  static const String _legacyPreferencesFileName = 'character_collector_preferences.json';
 
   Future<File> _getPreferencesFile(String fileName) async {
     final directory = await getApplicationDocumentsDirectory();
@@ -16,27 +15,13 @@ class PreferencesRepository {
   Future<Map<String, dynamic>> loadPreferences() async {
     try {
       final currentFile = await _getPreferencesFile(_preferencesFileName);
-      final legacyFile = await _getPreferencesFile(_legacyPreferencesFileName);
 
-      File? sourceFile;
-
-      if (await currentFile.exists()) {
-        sourceFile = currentFile;
-      } else if (await legacyFile.exists()) {
-        sourceFile = legacyFile;
-      }
-
-      if (sourceFile == null) {
+      if (!await currentFile.exists()) {
         return {};
       }
 
-      final jsonText = await sourceFile.readAsString();
+      final jsonText = await currentFile.readAsString();
       final data = jsonDecode(jsonText) as Map<String, dynamic>;
-
-      // Migrate from legacy to current file location if needed
-      if (sourceFile.path == legacyFile.path) {
-        await savePreferences(data);
-      }
 
       return data;
     } catch (_) {
