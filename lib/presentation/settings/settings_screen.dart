@@ -12,6 +12,7 @@ import '../../core/theme/theme_preset.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../domain/models/vault_backup.dart';
 import '../import/csv_preview_screen.dart';
+import '../import/excel_preview_screen.dart';
 
 class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
@@ -245,6 +246,31 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                     Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (context) => CsvPreviewScreen(
+                          filePath: result!.files.single.path!,
+                        ),
+                      ),
+                    );
+                  }
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.description),
+                title: const Text('Import Excel'),
+                subtitle: const Text('Import an Excel (.xlsx) file into a new database'),
+                onTap: () async {
+                  FilePickerResult? result;
+                  try {
+                    result = await FilePicker.pickFiles(
+                      type: FileType.custom,
+                      allowedExtensions: ['xlsx'],
+                    );
+                  } catch (e) {
+                    // Ignored
+                  }
+                  if (result != null && result.files.single.path != null && context.mounted) {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (context) => ExcelPreviewScreen(
                           filePath: result!.files.single.path!,
                         ),
                       ),

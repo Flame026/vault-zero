@@ -61,71 +61,38 @@ Avoid shortcuts that create future architectural debt.
 
 ---
 
-# 3. Current Product State
-
 ## Current Version
 
-**V2.8**
+**V3.0**
 
-V2.8 is the current polished baseline.
+V3.0 incorporates the completed V2.8-C Legacy Retirement and V3.0-B CSV Import system.
 
-Latest clean baseline:
+## Completed Work
 
-```text
-40823ed feat: add responsive tablet layouts
-```
+### V2.8-C — Product Consolidation
+- Audited and completely removed Legacy Character Collector codebase, models, widgets, and navigation.
+- Removed legacy `characters` table via SQLite migration (Schema Version 4).
+- Moved Appearance controls (Theme color, Light/Dark mode) directly into main Settings screen.
+- Renamed package to `vault_zero`.
 
-Previous important commits:
+### V3.0-B — CSV Import
+- Implemented `TabularDataSource` abstraction and `CsvDataSource` streaming parser using `csv: ^8.0.0` (`csv.decoder`).
+- Created `ImportService` for streaming, database creation, header normalization, and atomic rollback on failure.
+- Implemented bulk write operation `RecordRepository.saveRecordsBatch` using single-transaction batching without N-query lookups.
+- Added `CsvPreviewScreen` with cheap 5-row preview and editable target database name.
+- Added comprehensive unit and integration tests covering parser edge cases, streaming, batching, and atomic rollback.
 
-```text
-ef35678 feat: complete V2.8 theme system
-38ca88c wip: checkpoint V2.8 polish batch 1
-0a90c95 feat: add V2.5 record pagination and export hardening
-e0ee2d0 feat: add V2.5 backup and restore
-```
+### V3.0-C — Excel Import
+- Implemented `ExcelDataSource` (`excel: 4.0.6`) implementing `TabularDataSource`.
+- Worksheet enumeration and selection (one worksheet per imported database).
+- Deterministic CellValue-to-Text conversion (Text, Int, Double, Bool, Date, DateTime, Time, Formula).
+- Added `ExcelPreviewScreen` matching responsive styling and worksheet selector.
+- Added `Import Excel` to SettingsScreen.
+- Added comprehensive test suite (`test/excel_import_test.dart`).
 
-The repository is currently expected to remain clean before starting a new milestone.
+## Next Milestone
 
-## Completed V2.8 Work
-
-- UX polish
-- Form input improvements
-- Keyboard behavior improvements
-- Tap-to-unfocus
-- Animated state transitions
-- Pagination loading polish
-- Five application themes
-- Light and Dark variants for all five themes
-- Material 3 component theming
-- Responsive tablet layouts
-- Responsive database and record grids
-- Constrained tablet forms/settings
-- Responsive field management while preserving drag/reorder behavior
-
-## Current Milestone
-
-**V2.8-C — Product Consolidation**
-
-Planned work:
-
-1. Audit remaining Legacy code and references.
-2. Remove the obsolete Legacy Character application.
-3. Remove legacy-only database/schema code where safe.
-4. Remove obsolete legacy preferences/migration logic.
-5. Remove Legacy from user-facing navigation.
-6. Move Appearance controls into the main Settings screen.
-7. Verify the generic application after cleanup.
-
-The old Legacy application was **never publicly distributed**, so there is no requirement to preserve migration compatibility for old user installations.
-
-## Next Major Version
-
-**V3.0 — Import**
-
-Current V3.0 scope:
-
-- CSV Import
-- Excel Import
+**V3.1 — Product Hardening / Future Milestones**
 
 Explicitly removed from the old roadmap:
 
@@ -801,22 +768,36 @@ STATUS: Complete
 
 ## V2.8-C — Product Consolidation
 
-STATUS: Next
+STATUS: Complete
 
-- [ ] Audit Legacy
-- [ ] Remove Legacy application
-- [ ] Remove legacy-only schema/code
-- [ ] Remove obsolete preferences/migration logic
-- [ ] Move Appearance to main Settings
-- [ ] Remove Legacy navigation
-- [ ] Verify entire application
+- [x] Audit Legacy
+- [x] Remove Legacy application
+- [x] Remove legacy-only schema/code
+- [x] Remove obsolete preferences/migration logic
+- [x] Move Appearance to main Settings
+- [x] Remove Legacy navigation
+- [x] Verify entire application
 
-## V3.0 — Import
+## V3.0-B — CSV Import
 
-STATUS: Planned
+STATUS: Complete
 
-- [ ] CSV Import
-- [ ] Excel Import
+- [x] `TabularDataSource` abstraction
+- [x] `CsvDataSource` streaming parser (`csv: ^8.0.0`)
+- [x] `ImportService` batching & rollback
+- [x] `RecordRepository.saveRecordsBatch` single-transaction bulk write
+- [x] `CsvPreviewScreen` UI & `SettingsScreen` integration
+- [x] Unit and integration test suite
+
+## V3.0-C — Excel Import
+
+STATUS: Complete
+
+- [x] `ExcelDataSource` (`excel: 4.0.6`) implementing `TabularDataSource`
+- [x] Deterministic CellValue-to-Text conversion
+- [x] `ExcelPreviewScreen` UI with worksheet selection
+- [x] `SettingsScreen` integration under DATA
+- [x] Comprehensive test suite (`test/excel_import_test.dart`)
 
 Explicitly not planned:
 
@@ -836,12 +817,7 @@ At the beginning of a new development session, update this section with the curr
 Current task:
 
 ```text
-V2.8-C — Product Consolidation
-
-First action:
-Perform a complete Legacy dependency audit.
-
-Do not modify code until the audit is complete and reviewed.
+V3.0-C Excel Import Complete & Verified.
 ```
 
 ---
