@@ -9,28 +9,30 @@
 </p>
 
 <p align="center">
-A premium offline-first character manager for Android.
+A fast, offline-first customizable database app for Android, built with Flutter.
 </p>
 
 ---
 
-## Screenshots
+## Features
 
-### Home
+- Custom offline databases, fields, and records
+- Fast sequential record entry
+- CSV & Excel import
+- Excel export
+- Backup & restore
+- Five visual themes with Light/Dark modes
+- Responsive phone, tablet, and landscape layouts
+- SQLite-powered offline storage
 
-| Light | Dark |
-|-------|------|
-| ![](screenshots/home/light.jpg) | ![](screenshots/home/dark.jpg) |
+---
 
-### Themes
+## Tech Stack
 
-| Purple | Blue |
-|--------|------|
-| ![](screenshots/themes/purple.jpg) | ![](screenshots/themes/blue.jpg) |
-
-| Green | Orange | Pink |
-|-------|--------|------|
-| ![](screenshots/themes/green.jpg) | ![](screenshots/themes/orange.jpg) | ![](screenshots/themes/pink.jpg) |
+- Flutter & Dart
+- SQLite
+- Riverpod
+- Material 3
 
 ---
 
@@ -45,16 +47,11 @@ Current version:
 
 ---
 
-## Roadmap
+## Status
 
-Future improvements include:
+Vault Zero 1.0.0 is the current stable release.
 
-- Backup & Restore
-- Advanced search & filtering
-- Additional export formats
-- Theme refinements
-- UI & UX improvements
-- Performance optimizations
+The project is maintained primarily through bug fixes, improvements, and community pull requests.
 
 ---
 
