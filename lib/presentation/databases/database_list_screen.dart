@@ -51,7 +51,7 @@ class DatabaseListScreen extends ConsumerWidget {
         title: const Text('Vault Zero'),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings),
+            icon: const Icon(Icons.settings_outlined),
             tooltip: 'Settings',
             onPressed: () {
               Navigator.of(context).push(
@@ -71,21 +71,22 @@ class DatabaseListScreen extends ConsumerWidget {
             return RefreshIndicator(
               key: const ValueKey('data'),
               onRefresh: () async {
-                // AsyncValue.guard handles loading, but RefreshIndicator expects a Future
                 ref.invalidate(databaseListControllerProvider);
               },
               child: LayoutBuilder(
                 builder: (context, constraints) {
-                  final isWide = constraints.maxWidth >= 600;
+                  final width = constraints.maxWidth;
+                  final isWide = width >= 600;
 
                   if (isWide) {
+                    final isLarge = width >= 900;
                     return GridView.builder(
-                      padding: const EdgeInsets.all(16),
-                      gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                        maxCrossAxisExtent: 400,
+                      padding: EdgeInsets.all(isLarge ? 24 : 20),
+                      gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                        maxCrossAxisExtent: 440,
                         mainAxisExtent: 104,
-                        crossAxisSpacing: 16,
-                        mainAxisSpacing: 16,
+                        crossAxisSpacing: isLarge ? 20 : 16,
+                        mainAxisSpacing: isLarge ? 20 : 16,
                       ),
                       itemCount: databases.length,
                       itemBuilder: (context, index) {
@@ -144,7 +145,10 @@ class DatabaseListScreen extends ConsumerWidget {
               ),
             );
           },
-          loading: () => const Center(key: ValueKey('loading'), child: CircularProgressIndicator()),
+          loading: () => const Center(
+            key: ValueKey('loading'),
+            child: CircularProgressIndicator(),
+          ),
           error: (error, stack) => Center(
             key: const ValueKey('error'),
             child: Padding(
@@ -152,22 +156,37 @@ class DatabaseListScreen extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      size: 48,
+                      color: colorScheme.error,
+                    ),
+                  ),
                   const SizedBox(height: 16),
                   Text(
                     'Failed to load databases',
-                    style: theme.textTheme.titleLarge,
+                    style: theme.textTheme.titleLarge?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     error.toString(),
-                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
+                    style: theme.textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    ),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: () => ref.invalidate(databaseListControllerProvider),
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Retry'),
                   ),
                 ],
@@ -178,7 +197,7 @@ class DatabaseListScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateDialog(context, ref),
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_rounded),
         label: const Text('New Database'),
       ),
     );
@@ -187,7 +206,7 @@ class DatabaseListScreen extends ConsumerWidget {
   Widget _buildEmptyState(BuildContext context, WidgetRef ref) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Center(
       key: const ValueKey('empty'),
       child: Padding(
@@ -196,14 +215,15 @@ class DatabaseListScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                shape: BoxShape.circle,
+                color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(28),
               ),
               child: Icon(
                 Icons.storage_rounded,
-                size: 72,
+                size: 44,
                 color: colorScheme.primary,
               ),
             ),
@@ -225,7 +245,7 @@ class DatabaseListScreen extends ConsumerWidget {
             const SizedBox(height: 32),
             FilledButton.icon(
               onPressed: () => _showCreateDialog(context, ref),
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_rounded),
               label: const Text('Create Database'),
             ),
           ],

@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-
 import 'package:share_plus/share_plus.dart';
 
 import '../../../domain/models/database_definition.dart';
@@ -42,6 +41,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
       ref.read(recordListControllerProvider(widget.database.id).notifier).loadMore();
     }
   }
+
   void _showCreateScreen(BuildContext context, fields) {
     Navigator.of(context).push(
       MaterialPageRoute(
@@ -107,31 +107,27 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
   Widget build(BuildContext context) {
     final fieldsState = ref.watch(fieldListControllerProvider(widget.database.id));
     final recordsState = ref.watch(recordListControllerProvider(widget.database.id));
-    final exportState = ref.watch(v2ExportControllerProvider);
+    final isFetchingMore = ref.watch(recordListControllerProvider(widget.database.id).notifier).isFetchingMore;
+
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
-    final isExporting = exportState.isLoading;
-    final isFetchingMore = ref.watch(recordListControllerProvider(widget.database.id).notifier).isFetchingMore;
 
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.database.name),
         actions: [
-          fieldsState.maybeWhen(
-            data: (fields) => IconButton(
-              icon: isExporting
-                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.file_download_outlined),
-              tooltip: 'Export to Excel',
-              onPressed: isExporting ? null : () => _handleExport(context, ref, fields),
-            ),
-            orElse: () => const SizedBox.shrink(),
-          ),
           IconButton(
-            icon: const Icon(Icons.schema_rounded),
+            icon: const Icon(Icons.schema_outlined),
             tooltip: 'Manage Fields',
             onPressed: () => _openManageFields(context),
+          ),
+          fieldsState.maybeWhen(
+            data: (fields) => IconButton(
+              icon: const Icon(Icons.file_download_outlined),
+              tooltip: 'Export Excel',
+              onPressed: () => _handleExport(context, ref, fields),
+            ),
+            orElse: () => const SizedBox.shrink(),
           ),
         ],
       ),
@@ -157,18 +153,20 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
                     },
                     child: LayoutBuilder(
                       builder: (context, constraints) {
-                        final isWide = constraints.maxWidth >= 600;
+                        final width = constraints.maxWidth;
+                        final isWide = width >= 600;
 
                         if (isWide) {
+                          final isLarge = width >= 900;
                           return GridView.builder(
                             controller: _scrollController,
                             physics: const AlwaysScrollableScrollPhysics(),
-                            padding: const EdgeInsets.all(16),
-                            gridDelegate: const SliverGridDelegateWithMaxCrossAxisExtent(
-                              maxCrossAxisExtent: 400,
-                              mainAxisExtent: 96,
-                              crossAxisSpacing: 16,
-                              mainAxisSpacing: 16,
+                            padding: EdgeInsets.all(isLarge ? 24 : 20),
+                            gridDelegate: SliverGridDelegateWithMaxCrossAxisExtent(
+                              maxCrossAxisExtent: 440,
+                              mainAxisExtent: 104,
+                              crossAxisSpacing: isLarge ? 20 : 16,
+                              mainAxisSpacing: isLarge ? 20 : 16,
                             ),
                             itemCount: records.length + (isFetchingMore ? 1 : 0),
                             itemBuilder: (context, index) {
@@ -195,11 +193,12 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
                           );
                         }
 
-                        return ListView.builder(
+                        return ListView.separated(
                           controller: _scrollController,
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.all(16),
                           itemCount: records.length + (isFetchingMore ? 1 : 0),
+                          separatorBuilder: (context, index) => const SizedBox(height: 12),
                           itemBuilder: (context, index) {
                             if (index == records.length) {
                               return const SafeArea(
@@ -217,15 +216,11 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
                               );
                             }
                             final record = records[index];
-                            return Padding(
-                              key: ValueKey(record.id),
-                              padding: const EdgeInsets.only(bottom: 12),
-                              child: RecordCard(
-                                record: record,
-                                fields: fields,
-                                onTap: () => _showEditScreen(context, record, fields),
-                                onDelete: () => _showDeleteDialog(context, ref, record),
-                              ),
+                            return RecordCard(
+                              record: record,
+                              fields: fields,
+                              onTap: () => _showEditScreen(context, record, fields),
+                              onDelete: () => _showDeleteDialog(context, ref, record),
                             );
                           },
                         );
@@ -233,12 +228,18 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
                     ),
                   );
                 },
-                loading: () => const Center(key: ValueKey('loading_records'), child: CircularProgressIndicator()),
+                loading: () => const Center(
+                  key: ValueKey('loading_records'),
+                  child: CircularProgressIndicator(),
+                ),
                 error: (err, st) => _buildErrorState(context, ref, err, theme, colorScheme),
               ),
             );
           },
-          loading: () => const Center(key: ValueKey('loading_fields'), child: CircularProgressIndicator()),
+          loading: () => const Center(
+            key: ValueKey('loading_fields'),
+            child: CircularProgressIndicator(),
+          ),
           error: (err, st) => _buildErrorState(context, ref, err, theme, colorScheme),
         ),
       ),
@@ -246,7 +247,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
         data: (fields) => fields.isNotEmpty
             ? FloatingActionButton.extended(
                 onPressed: () => _showCreateScreen(context, fields),
-                icon: const Icon(Icons.add),
+                icon: const Icon(Icons.add_rounded),
                 label: const Text('New Record'),
               )
             : null,
@@ -263,13 +264,32 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.view_kanban_outlined, size: 72, color: colorScheme.primary),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(
+                Icons.schema_rounded,
+                size: 44,
+                color: colorScheme.primary,
+              ),
+            ),
             const SizedBox(height: 24),
-            Text('No Fields Defined', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              'No Fields Defined',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
-              "Please define at least one field before adding records.",
-              style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+              'Please define at least one field before adding records.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
             const SizedBox(height: 32),
@@ -292,13 +312,32 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.inventory_2_outlined, size: 72, color: colorScheme.primary),
+            Container(
+              width: 88,
+              height: 88,
+              decoration: BoxDecoration(
+                color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(28),
+              ),
+              child: Icon(
+                Icons.description_rounded,
+                size: 44,
+                color: colorScheme.primary,
+              ),
+            ),
             const SizedBox(height: 24),
-            Text('No Records', style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+            Text(
+              'No Records',
+              style: theme.textTheme.headlineSmall?.copyWith(
+                fontWeight: FontWeight.bold,
+              ),
+            ),
             const SizedBox(height: 8),
             Text(
-              "No records found. Tap + to create your first record.",
-              style: theme.textTheme.bodyLarge?.copyWith(color: colorScheme.onSurfaceVariant),
+              'No records found. Tap + to create your first record.',
+              style: theme.textTheme.bodyLarge?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
               textAlign: TextAlign.center,
             ),
           ],
@@ -315,9 +354,23 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.error_outline_rounded,
+                size: 48,
+                color: colorScheme.error,
+              ),
+            ),
             const SizedBox(height: 16),
-            Text('Failed to load', style: theme.textTheme.titleLarge),
+            Text(
+              'Failed to load',
+              style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            ),
             const SizedBox(height: 8),
             Text(
               error.toString(),
@@ -330,7 +383,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
                 ref.invalidate(fieldListControllerProvider(widget.database.id));
                 ref.invalidate(recordListControllerProvider(widget.database.id));
               },
-              icon: const Icon(Icons.refresh),
+              icon: const Icon(Icons.refresh_rounded),
               label: const Text('Retry'),
             ),
           ],

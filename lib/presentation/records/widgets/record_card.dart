@@ -50,6 +50,7 @@ class RecordCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       elevation: 0,
+      color: colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
@@ -61,22 +62,25 @@ class RecordCard extends StatelessWidget {
         child: Padding(
           padding: const EdgeInsets.all(16.0),
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 44,
+                height: 44,
                 decoration: BoxDecoration(
                   color: colorScheme.primaryContainer,
-                  shape: BoxShape.circle,
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(
                   Icons.description_rounded,
                   color: colorScheme.onPrimaryContainer,
-                  size: 24,
+                  size: 22,
                 ),
               ),
               const SizedBox(width: 16),
               Expanded(
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
@@ -101,8 +105,15 @@ class RecordCard extends StatelessWidget {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
               PopupMenuButton<String>(
-                icon: const Icon(Icons.more_vert),
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
                 onSelected: (value) {
                   if (value == 'delete') {
                     onDelete();

@@ -63,31 +63,34 @@ class FieldListScreen extends ConsumerWidget {
               child: Align(
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 700),
+                  constraints: const BoxConstraints(maxWidth: 720),
                   child: ReorderableListView.builder(
-                padding: const EdgeInsets.all(16),
-                itemCount: fields.length,
-                onReorderItem: (oldIndex, newIndex) {
-                  ref.read(fieldListControllerProvider(database.id).notifier).reorderFields(oldIndex, newIndex);
-                },
-                itemBuilder: (context, index) {
-                  final field = fields[index];
-                  return Padding(
-                    key: ValueKey(field.id),
-                    padding: const EdgeInsets.only(bottom: 12),
-                    child: FieldCard(
-                      field: field,
-                      onEdit: () => _showEditScreen(context, field),
-                      onDelete: () => _showDeleteDialog(context, ref, field),
-                    ),
-                  );
-                },
-              ),
+                    padding: const EdgeInsets.all(16),
+                    itemCount: fields.length,
+                    onReorderItem: (oldIndex, newIndex) {
+                      ref.read(fieldListControllerProvider(database.id).notifier).reorderFields(oldIndex, newIndex);
+                    },
+                    itemBuilder: (context, index) {
+                      final field = fields[index];
+                      return Padding(
+                        key: ValueKey(field.id),
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: FieldCard(
+                          field: field,
+                          onEdit: () => _showEditScreen(context, field),
+                          onDelete: () => _showDeleteDialog(context, ref, field),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             );
           },
-          loading: () => const Center(key: ValueKey('loading'), child: CircularProgressIndicator()),
+          loading: () => const Center(
+            key: ValueKey('loading'),
+            child: CircularProgressIndicator(),
+          ),
           error: (error, stack) => Center(
             key: const ValueKey('error'),
             child: Padding(
@@ -95,9 +98,23 @@ class FieldListScreen extends ConsumerWidget {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Icon(Icons.error_outline, size: 64, color: colorScheme.error),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      Icons.error_outline_rounded,
+                      size: 48,
+                      color: colorScheme.error,
+                    ),
+                  ),
                   const SizedBox(height: 16),
-                  Text('Failed to load fields', style: theme.textTheme.titleLarge),
+                  Text(
+                    'Failed to load fields',
+                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 8),
                   Text(
                     error.toString(),
@@ -107,7 +124,7 @@ class FieldListScreen extends ConsumerWidget {
                   const SizedBox(height: 24),
                   FilledButton.icon(
                     onPressed: () => ref.invalidate(fieldListControllerProvider(database.id)),
-                    icon: const Icon(Icons.refresh),
+                    icon: const Icon(Icons.refresh_rounded),
                     label: const Text('Retry'),
                   ),
                 ],
@@ -118,7 +135,7 @@ class FieldListScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showCreateScreen(context),
-        icon: const Icon(Icons.add),
+        icon: const Icon(Icons.add_rounded),
         label: const Text('New Field'),
       ),
     );
@@ -127,7 +144,7 @@ class FieldListScreen extends ConsumerWidget {
   Widget _buildEmptyState(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
-    
+
     return Center(
       key: const ValueKey('empty'),
       child: Padding(
@@ -136,14 +153,15 @@ class FieldListScreen extends ConsumerWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Container(
-              padding: const EdgeInsets.all(24),
+              width: 88,
+              height: 88,
               decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.5),
-                shape: BoxShape.circle,
+                color: colorScheme.primaryContainer.withValues(alpha: 0.45),
+                borderRadius: BorderRadius.circular(28),
               ),
               child: Icon(
-                Icons.view_list_rounded,
-                size: 72,
+                Icons.schema_rounded,
+                size: 44,
                 color: colorScheme.primary,
               ),
             ),
@@ -165,7 +183,7 @@ class FieldListScreen extends ConsumerWidget {
             const SizedBox(height: 32),
             FilledButton.icon(
               onPressed: () => _showCreateScreen(context),
-              icon: const Icon(Icons.add),
+              icon: const Icon(Icons.add_rounded),
               label: const Text('Add Field'),
             ),
           ],

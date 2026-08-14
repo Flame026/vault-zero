@@ -17,34 +17,42 @@ class FieldCard extends StatelessWidget {
   IconData _getIconForType(FieldType type) {
     switch (type) {
       case FieldType.text:
-        return Icons.text_fields;
+        return Icons.text_fields_rounded;
       case FieldType.longText:
-        return Icons.notes;
+        return Icons.notes_rounded;
       case FieldType.integer:
-        return Icons.numbers;
+        return Icons.numbers_rounded;
       case FieldType.decimal:
-        return Icons.money;
+        return Icons.attach_money_rounded;
       case FieldType.boolean:
-        return Icons.check_box;
+        return Icons.check_box_outlined;
       case FieldType.date:
-        return Icons.calendar_today;
+        return Icons.calendar_today_rounded;
       case FieldType.dateTime:
-        return Icons.access_time;
+        return Icons.access_time_rounded;
       case FieldType.choice:
-        return Icons.list_alt;
+        return Icons.list_alt_rounded;
     }
   }
 
   String _getTypeLabel(FieldType type) {
     switch (type) {
-      case FieldType.text: return 'Text';
-      case FieldType.longText: return 'Long Text';
-      case FieldType.integer: return 'Integer';
-      case FieldType.decimal: return 'Decimal';
-      case FieldType.boolean: return 'Boolean (Yes/No)';
-      case FieldType.date: return 'Date';
-      case FieldType.dateTime: return 'Date & Time';
-      case FieldType.choice: return 'Choice';
+      case FieldType.text:
+        return 'Text';
+      case FieldType.longText:
+        return 'Long Text';
+      case FieldType.integer:
+        return 'Integer';
+      case FieldType.decimal:
+        return 'Decimal';
+      case FieldType.boolean:
+        return 'Boolean (Yes/No)';
+      case FieldType.date:
+        return 'Date';
+      case FieldType.dateTime:
+        return 'Date & Time';
+      case FieldType.choice:
+        return 'Choice';
     }
   }
 
@@ -57,6 +65,7 @@ class FieldCard extends StatelessWidget {
       key: ValueKey(field.id),
       clipBehavior: Clip.antiAlias,
       elevation: 0,
+      color: colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
@@ -64,32 +73,31 @@ class FieldCard extends StatelessWidget {
         ),
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12.0),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
         child: Row(
           children: [
-            ReorderableDragStartListener(
-              index: 0, // This gets overridden by the ListView, but we supply it anyway. Wait, ReorderableDragStartListener needs the actual index.
-              // Actually, ReorderableListView handles dragging via the drag handle automatically if we use ReorderableDragStartListener, but it's easier to just let ReorderableListView handle it by default, or provide an explicit handle.
-              // We'll replace ReorderableDragStartListener with an Icon, and ReorderableListView will make the whole card draggable, or we can use ReorderableDragStartListener around a handle.
-              // We'll just provide a drag handle icon visually. The framework handles dragging on long-press.
-              child: Padding(
-                padding: const EdgeInsets.all(8.0),
-                child: Icon(Icons.drag_indicator, color: colorScheme.onSurfaceVariant),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4),
+              child: Icon(
+                Icons.drag_indicator_rounded,
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                size: 22,
               ),
             ),
             Container(
-              padding: const EdgeInsets.all(10),
+              width: 40,
+              height: 40,
               decoration: BoxDecoration(
-                color: colorScheme.secondaryContainer,
-                borderRadius: BorderRadius.circular(10),
+                color: colorScheme.primaryContainer,
+                borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(
                 _getIconForType(field.type),
-                color: colorScheme.onSecondaryContainer,
+                color: colorScheme.onPrimaryContainer,
                 size: 20,
               ),
             ),
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -109,10 +117,10 @@ class FieldCard extends StatelessWidget {
                       if (field.isRequired) ...[
                         const SizedBox(width: 8),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           decoration: BoxDecoration(
-                            color: colorScheme.errorContainer,
-                            borderRadius: BorderRadius.circular(4),
+                            color: colorScheme.errorContainer.withValues(alpha: 0.7),
+                            borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
                             'Required',
@@ -125,7 +133,7 @@ class FieldCard extends StatelessWidget {
                       ],
                     ],
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 2),
                   Text(
                     _getTypeLabel(field.type),
                     style: theme.textTheme.bodyMedium?.copyWith(
@@ -136,7 +144,13 @@ class FieldCard extends StatelessWidget {
               ),
             ),
             PopupMenuButton<String>(
-              icon: const Icon(Icons.more_vert),
+              icon: Icon(
+                Icons.more_vert_rounded,
+                color: colorScheme.onSurfaceVariant,
+              ),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
               onSelected: (value) {
                 if (value == 'edit') {
                   onEdit();

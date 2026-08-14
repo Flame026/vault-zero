@@ -799,6 +799,15 @@ STATUS: Complete
 - [x] `SettingsScreen` integration under DATA
 - [x] Comprehensive test suite (`test/excel_import_test.dart`)
 
+## V3.1 — Visual UX Refinement Pass
+
+STATUS: Complete
+
+- [x] Theme Chooser Redesign (`ThemePickerSheet`) with human-readable labels, rich descriptions, active checkmark badges, and responsive modal presentation (bottom sheet on phone, centered modal on tablet/desktop)
+- [x] Responsive Settings Layout with 3 breakpoints: single-column grouped cards (<720px), centered constrained (720-899px), and two-pane master-detail layout (>=900px)
+- [x] Dashboard & Card Refinements (`DatabaseCard`, `RecordCard`, `FieldCard`) with 16px border radius, `surfaceContainerLow` elevation, squircle icon badges, and adaptive grid sizing
+- [x] Global Visual Consistency: standardized typography, section headers, 16px/24px geometry system, and polished empty/loading/error states across all screens
+
 Explicitly not planned:
 
 - Database Templates
@@ -817,7 +826,7 @@ At the beginning of a new development session, update this section with the curr
 Current task:
 
 ```text
-V3.0-C Excel Import Complete & Verified.
+V3.1 Visual UX Refinement Pass Complete — Awaiting Verification.
 ```
 
 ---

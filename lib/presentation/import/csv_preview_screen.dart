@@ -47,20 +47,24 @@ class _CsvPreviewScreenState extends ConsumerState<CsvPreviewScreen> {
     try {
       final source = CsvDataSource(File(widget.filePath));
       final headers = await source.getHeaders();
-      
+
       // Load max 5 rows for sample
       final rows = await source.getRows().take(5).toList();
 
-      setState(() {
-        _headers = headers;
-        _sampleRows = rows;
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _headers = headers;
+          _sampleRows = rows;
+          _isLoading = false;
+        });
+      }
     } catch (e) {
-      setState(() {
-        _error = 'Failed to read CSV preview: $e';
-        _isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          _error = 'Failed to read CSV preview: $e';
+          _isLoading = false;
+        });
+      }
     }
   }
 
@@ -80,9 +84,9 @@ class _CsvPreviewScreenState extends ConsumerState<CsvPreviewScreen> {
     try {
       final importService = await ref.read(importServiceProvider.future);
       final source = CsvDataSource(File(widget.filePath));
-      
+
       await importService.importDatabase(dbName, source);
-      
+
       // Refresh the root database list
       ref.invalidate(schemaRepositoryProvider);
       ref.invalidate(recordRepositoryProvider);
@@ -120,9 +124,12 @@ class _CsvPreviewScreenState extends ConsumerState<CsvPreviewScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Preview Import'),
+        title: const Text('Preview CSV Import'),
       ),
       body: Stack(
         children: [
@@ -134,85 +141,162 @@ class _CsvPreviewScreenState extends ConsumerState<CsvPreviewScreen> {
                 padding: const EdgeInsets.all(24.0),
                 child: Text(
                   _error!,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error),
+                  style: TextStyle(color: colorScheme.error),
                   textAlign: TextAlign.center,
                 ),
               ),
             )
           else
-            Column(
-              children: [
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.all(24.0),
-                    children: [
-                      Text(
-                        'File: ${p.basename(widget.filePath)}',
-                        style: Theme.of(context).textTheme.titleMedium,
-                      ),
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: _nameController,
-                        decoration: const InputDecoration(
-                          labelText: 'Target Database Name',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Detected Headers (${_headers.length}):',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 8,
-                        children: _headers.map((h) => Chip(label: Text(h))).toList(),
-                      ),
-                      const SizedBox(height: 24),
-                      Text(
-                        'Sample Data (First ${_sampleRows.length} rows):',
-                        style: Theme.of(context).textTheme.titleSmall,
-                      ),
-                      const SizedBox(height: 8),
-                      SingleChildScrollView(
-                        scrollDirection: Axis.horizontal,
-                        child: DataTable(
-                          columns: _headers
-                              .map((h) => DataColumn(label: Text(h)))
-                              .toList(),
-                          rows: _sampleRows.map((row) {
-                            return DataRow(
-                              cells: List.generate(_headers.length, (index) {
-                                final cellText = index < row.length
-                                    ? row[index].toString()
-                                    : '';
-                                return DataCell(Text(
-                                  cellText.length > 30
-                                      ? '${cellText.substring(0, 27)}...'
-                                      : cellText,
-                                ));
-                              }),
-                            );
-                          }).toList(),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                SafeArea(
-                  child: Padding(
-                    padding: const EdgeInsets.all(16.0),
-                    child: SizedBox(
-                      width: double.infinity,
-                      child: FilledButton(
-                        onPressed: _isImporting ? null : _handleImport,
-                        child: const Text('Import Database'),
+            Align(
+              alignment: Alignment.topCenter,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Column(
+                  children: [
+                    Expanded(
+                      child: ListView(
+                        padding: const EdgeInsets.all(24.0),
+                        children: [
+                          Card(
+                            elevation: 0,
+                            color: colorScheme.surfaceContainerLow,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      color: colorScheme.primaryContainer,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                    child: Icon(
+                                      Icons.table_view_rounded,
+                                      color: colorScheme.onPrimaryContainer,
+                                      size: 24,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 16),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Source File',
+                                          style: theme.textTheme.labelMedium?.copyWith(
+                                            color: colorScheme.onSurfaceVariant,
+                                          ),
+                                        ),
+                                        Text(
+                                          p.basename(widget.filePath),
+                                          style: theme.textTheme.titleMedium?.copyWith(
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 20),
+                          TextField(
+                            controller: _nameController,
+                            decoration: const InputDecoration(
+                              labelText: 'Target Database Name',
+                              border: OutlineInputBorder(),
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Detected Headers (${_headers.length}):',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Wrap(
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: _headers
+                                .map((h) => Chip(
+                                      label: Text(h),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(10),
+                                      ),
+                                    ))
+                                .toList(),
+                          ),
+                          const SizedBox(height: 24),
+                          Text(
+                            'Sample Data (First ${_sampleRows.length} rows):',
+                            style: theme.textTheme.titleSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Card(
+                            elevation: 0,
+                            color: colorScheme.surfaceContainerLow,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
+                              side: BorderSide(
+                                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                              ),
+                            ),
+                            clipBehavior: Clip.antiAlias,
+                            child: SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: DataTable(
+                                columns: _headers
+                                    .map((h) => DataColumn(
+                                          label: Text(
+                                            h,
+                                            style: const TextStyle(fontWeight: FontWeight.bold),
+                                          ),
+                                        ))
+                                    .toList(),
+                                rows: _sampleRows.map((row) {
+                                  return DataRow(
+                                    cells: List.generate(_headers.length, (index) {
+                                      final cellText = index < row.length ? row[index].toString() : '';
+                                      return DataCell(Text(
+                                        cellText.length > 30 ? '${cellText.substring(0, 27)}...' : cellText,
+                                      ));
+                                    }),
+                                  );
+                                }).toList(),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
-                  ),
+                    SafeArea(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: SizedBox(
+                          width: double.infinity,
+                          child: FilledButton.icon(
+                            onPressed: _isImporting ? null : _handleImport,
+                            icon: const Icon(Icons.download_rounded),
+                            label: const Text('Import Database'),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           if (_isImporting)
             Container(

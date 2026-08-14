@@ -26,6 +26,7 @@ class DatabaseCard extends StatelessWidget {
     return Card(
       clipBehavior: Clip.antiAlias,
       elevation: 0,
+      color: colorScheme.surfaceContainerLow,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(16),
         side: BorderSide(
@@ -36,93 +37,98 @@ class DatabaseCard extends StatelessWidget {
         onTap: onTap,
         child: Padding(
           padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: colorScheme.primaryContainer,
-                      borderRadius: BorderRadius.circular(12),
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: colorScheme.primaryContainer,
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Icon(
+                  Icons.storage_rounded,
+                  color: colorScheme.onPrimaryContainer,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      database.name,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                    child: Icon(
-                      Icons.storage_rounded,
-                      color: colorScheme.onPrimaryContainer,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          database.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                    if (database.description.isNotEmpty) ...[
+                      const SizedBox(height: 4),
+                      Text(
+                        database.description,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: colorScheme.onSurfaceVariant,
                         ),
-                        if (database.description.isNotEmpty) ...[
-                          const SizedBox(height: 4),
-                          Text(
-                            database.description,
-                            style: theme.textTheme.bodyMedium?.copyWith(
-                              color: colorScheme.onSurfaceVariant,
-                            ),
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ],
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              PopupMenuButton<String>(
+                icon: Icon(
+                  Icons.more_vert_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                onSelected: (value) {
+                  if (value == 'manage_fields') {
+                    onManageFields();
+                  } else if (value == 'edit') {
+                    onEdit();
+                  } else if (value == 'delete') {
+                    onDelete();
+                  }
+                },
+                itemBuilder: (context) => [
+                  const PopupMenuItem(
+                    value: 'manage_fields',
+                    child: Row(
+                      children: [
+                        Icon(Icons.schema_rounded, size: 20),
+                        SizedBox(width: 12),
+                        Text('Manage Fields'),
                       ],
                     ),
                   ),
-                  PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_vert),
-                    onSelected: (value) {
-                      if (value == 'manage_fields') {
-                        onManageFields();
-                      } else if (value == 'edit') {
-                        onEdit();
-                      } else if (value == 'delete') {
-                        onDelete();
-                      }
-                    },
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'manage_fields',
-                        child: Row(
-                          children: [
-                            Icon(Icons.schema_rounded, size: 20),
-                            SizedBox(width: 12),
-                            Text('Manage Fields'),
-                          ],
-                        ),
-                      ),
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit_rounded, size: 20),
-                            SizedBox(width: 12),
-                            Text('Edit'),
-                          ],
-                        ),
-                      ),
-                      PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete_rounded, size: 20, color: colorScheme.error),
-                            const SizedBox(width: 12),
-                            Text('Delete', style: TextStyle(color: colorScheme.error)),
-                          ],
-                        ),
-                      ),
-                    ],
+                  const PopupMenuItem(
+                    value: 'edit',
+                    child: Row(
+                      children: [
+                        Icon(Icons.edit_rounded, size: 20),
+                        SizedBox(width: 12),
+                        Text('Edit'),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    child: Row(
+                      children: [
+                        Icon(Icons.delete_rounded, size: 20, color: colorScheme.error),
+                        const SizedBox(width: 12),
+                        Text('Delete', style: TextStyle(color: colorScheme.error)),
+                      ],
+                    ),
                   ),
                 ],
               ),
