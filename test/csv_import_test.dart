@@ -227,7 +227,11 @@ Jane, Doe, c
 
       expect(
         () => importService.importDatabase('Fail DB', failingSource),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('Changes reverted'))),
+        throwsA(
+          isA<Exception>()
+              .having((e) => e.toString(), 'message', contains('Changes reverted'))
+              .having((e) => e.toString(), 'message', isNot(contains('cleanup failed'))),
+        ),
       );
 
       final databases = await schemaRepo.getAllDatabases();
@@ -251,6 +255,29 @@ Jane, Doe, c
       final records = await recordRepo.getRecordsForDatabase(databases.first.id);
       expect(records.length, 1200);
       expect((records[1199].values[databases.first.fields[0].id] as TextFieldValue).value, 'Row1199_1');
+    });
+
+    test('Import preserves exact source row sequence', () async {
+      final sb = StringBuffer();
+      sb.writeln('Item');
+      for (var i = 0; i < 20; i++) {
+        sb.writeln('Sequence_$i');
+      }
+      final file = createTempCsv('sequence.csv', sb.toString());
+      final source = CsvDataSource(file);
+
+      await importService.importDatabase('Sequence DB', source);
+
+      final databases = await schemaRepo.getAllDatabases();
+      final db = databases.firstWhere((d) => d.name == 'Sequence DB');
+      final records = await recordRepo.getRecordsForDatabase(db.id);
+
+      expect(records.length, 20);
+      final fieldId = db.fields.first.id;
+      for (var i = 0; i < 20; i++) {
+        final val = (records[i].values[fieldId] as TextFieldValue).value;
+        expect(val, 'Sequence_$i');
+      }
     });
   });
 

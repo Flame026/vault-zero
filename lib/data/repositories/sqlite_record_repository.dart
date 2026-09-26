@@ -239,20 +239,51 @@ class SqliteRecordRepository implements RecordRepository {
       orderBy: 'created_at ASC',
     );
 
-    final records = <Record>[];
-    for (final row in results) {
+    if (results.isEmpty) return const [];
+
+    final fields = await db.query(
+      'fields',
+      where: 'database_id = ?',
+      whereArgs: [databaseId],
+    );
+
+    final Map<String, FieldType> dbFields = {
+      for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+    };
+
+    final valueResults = await db.rawQuery(
+      '''
+      SELECT fv.* FROM field_values fv
+      INNER JOIN records r ON fv.record_id = r.id
+      WHERE r.database_id = ?
+      ''',
+      [databaseId],
+    );
+
+    final Map<String, Map<String, FieldValue>> groupedValues = {
+      for (var row in results) row['id'] as String: {},
+    };
+
+    for (final row in valueResults) {
+      final recordId = row['record_id'] as String;
+      final fieldId = row['field_id'] as String;
+      final type = dbFields[fieldId];
+      if (type == null) continue;
+
       final id = row['id'] as String;
-      final values = await _getValuesForRecord(id, databaseId);
-      records.add(Record(
-        id: id,
-        databaseId: databaseId,
-        values: values,
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
-      ));
+      groupedValues[recordId]?[fieldId] = _mapFieldValue(type, id, recordId, fieldId, row);
     }
 
-    return records;
+    return results.map((row) {
+      final id = row['id'] as String;
+      return Record(
+        id: id,
+        databaseId: databaseId,
+        values: groupedValues[id] ?? {},
+        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
+      );
+    }).toList();
   }
 
   @override

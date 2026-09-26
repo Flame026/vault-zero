@@ -20,6 +20,9 @@ class RecordCard extends StatelessWidget {
 
   String _formatFieldValue(FieldValue? fieldValue) {
     if (fieldValue == null || fieldValue.value == null) return '';
+    if (fieldValue is BooleanFieldValue) {
+      return fieldValue.value ? 'Yes' : 'No';
+    }
     return fieldValue.value.toString();
   }
 

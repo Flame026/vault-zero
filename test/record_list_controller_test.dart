@@ -188,4 +188,35 @@ void main() {
     state = await container.read(recordListControllerProvider(testDbId).future);
     expect(state, isEmpty);
   });
+
+  test('Record creation works with typed values (bool, num, DateTime)', () async {
+    final boolField = FieldDefinition(
+      id: const Uuid().v4(),
+      databaseId: testDbId,
+      name: 'Active',
+      type: FieldType.boolean,
+      position: 2,
+      isRequired: false,
+      createdAt: DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+    final repo = SqliteSchemaRepository(db);
+    await repo.createField(boolField);
+
+    final controller = container.read(recordListControllerProvider(testDbId).notifier);
+    await controller.saveRecord(
+      fields: [nameField, ageField, boolField],
+      rawValues: {
+        nameField.id: 'Alice',
+        ageField.id: 25,
+        boolField.id: true,
+      },
+    );
+
+    final state = await container.read(recordListControllerProvider(testDbId).future);
+    final record = state.firstWhere((r) => r.values[nameField.id]?.value == 'Alice');
+    expect(record.values[nameField.id]?.value, 'Alice');
+    expect(record.values[ageField.id]?.value, 25);
+    expect(record.values[boolField.id]?.value, true);
+  });
 }

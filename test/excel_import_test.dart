@@ -191,6 +191,25 @@ void main() {
       expect(orderRows[0], ['O100', '250']);
     });
 
+    test('Reuses cached decoded workbook across getSheetNames, getHeaders, and getRows', () async {
+      final file = createTempExcel('cached.xlsx', (excel) {
+        final sheet = excel['Sheet1'];
+        sheet.appendRow([TextCellValue('Col1'), TextCellValue('Col2')]);
+        sheet.appendRow([TextCellValue('V1'), TextCellValue('V2')]);
+      });
+
+      final source = ExcelDataSource(file);
+      final sheets = await source.getSheetNames();
+      expect(sheets, contains('Sheet1'));
+
+      final headers = await source.getHeaders();
+      expect(headers, ['Col1', 'Col2']);
+
+      final rows = await source.getRows().toList();
+      expect(rows.length, 1);
+      expect(rows[0], ['V1', 'V2']);
+    });
+
     test('Throws on empty file or empty worksheet', () async {
       final emptyFile = File('${tempDir.path}/empty.xlsx');
       emptyFile.writeAsBytesSync([]);

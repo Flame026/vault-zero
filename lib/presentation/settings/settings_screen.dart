@@ -10,6 +10,7 @@ import 'package:share_plus/share_plus.dart';
 import '../../core/providers.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../domain/models/vault_backup.dart';
+import '../databases/controllers/database_list_controller.dart';
 import '../import/csv_preview_screen.dart';
 import '../import/excel_preview_screen.dart';
 import 'widgets/theme_picker_sheet.dart';
@@ -125,6 +126,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           // Refresh UI
           ref.invalidate(schemaRepositoryProvider);
           ref.invalidate(recordRepositoryProvider);
+          ref.invalidate(databaseListControllerProvider);
 
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(

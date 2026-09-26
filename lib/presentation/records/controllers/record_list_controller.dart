@@ -70,7 +70,8 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
     final Map<String, FieldValue> fieldValues = {};
     
     for (final field in fields) {
-      final String rawString = (rawValues[field.id] as String?) ?? '';
+      final dynamic raw = rawValues[field.id];
+      final String rawString = raw == null ? '' : raw.toString().trim();
       final valueId = existingRecord?.values[field.id]?.id ?? const Uuid().v4();
       
       FieldValue fieldValue;
@@ -85,11 +86,14 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
             break;
             
           case FieldType.integer:
-            if (rawString.isEmpty && !field.isRequired) {
-              fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0);
-              break;
+            if (raw == null || (raw is String && raw.isEmpty)) {
+              if (!field.isRequired) {
+                fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0);
+                break;
+              }
+              throw Exception('Invalid integer value for field "${field.name}"');
             }
-            final parsedInt = int.tryParse(rawString);
+            final parsedInt = raw is int ? raw : int.tryParse(rawString);
             if (parsedInt == null) {
               throw Exception('Invalid integer value for field "${field.name}"');
             }
@@ -97,11 +101,14 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
             break;
             
           case FieldType.decimal:
-            if (rawString.isEmpty && !field.isRequired) {
-              fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0.0);
-              break;
+            if (raw == null || (raw is String && raw.isEmpty)) {
+              if (!field.isRequired) {
+                fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0.0);
+                break;
+              }
+              throw Exception('Invalid decimal value for field "${field.name}"');
             }
-            final parsedDouble = double.tryParse(rawString);
+            final parsedDouble = raw is num ? raw.toDouble() : double.tryParse(rawString);
             if (parsedDouble == null) {
               throw Exception('Invalid decimal value for field "${field.name}"');
             }
@@ -109,20 +116,24 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
             break;
             
           case FieldType.boolean:
-            final l = rawString.trim().toLowerCase();
-            final boolVal = (l == 'true' || l == 'yes' || l == '1');
+            final boolVal = raw is bool
+                ? raw
+                : (rawString.toLowerCase() == 'true' || rawString.toLowerCase() == 'yes' || rawString == '1');
             fieldValue = BooleanFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: boolVal);
             break;
             
           case FieldType.date:
           case FieldType.dateTime:
-            if (rawString.isEmpty && !field.isRequired) {
-              fieldValue = field.type == FieldType.date
-                  ? DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970))
-                  : DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970));
-              break;
+            if (raw == null || (raw is String && raw.isEmpty)) {
+              if (!field.isRequired) {
+                fieldValue = field.type == FieldType.date
+                    ? DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970))
+                    : DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970));
+                break;
+              }
+              throw Exception('Invalid date format for field "${field.name}". Use YYYY-MM-DD');
             }
-            final parsedDate = DateTime.tryParse(rawString);
+            final parsedDate = raw is DateTime ? raw : DateTime.tryParse(rawString);
             if (parsedDate == null) {
               throw Exception('Invalid date format for field "${field.name}". Use YYYY-MM-DD');
             }

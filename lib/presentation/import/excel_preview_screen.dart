@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/providers.dart';
 import '../../data/importers/excel_data_source.dart';
+import '../databases/controllers/database_list_controller.dart';
 
 class ExcelPreviewScreen extends ConsumerStatefulWidget {
   final String filePath;
@@ -145,6 +146,7 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
       // Refresh the root database list
       ref.invalidate(schemaRepositoryProvider);
       ref.invalidate(recordRepositoryProvider);
+      ref.invalidate(databaseListControllerProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -284,7 +286,7 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
                           if (_sheetNames.length > 1) ...[
                             const SizedBox(height: 16),
                             DropdownButtonFormField<String>(
-                              initialValue: _selectedSheet,
+                              value: _selectedSheet,
                               decoration: const InputDecoration(
                                 labelText: 'Select Worksheet',
                                 border: OutlineInputBorder(),

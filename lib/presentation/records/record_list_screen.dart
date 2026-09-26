@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../../domain/models/database_definition.dart';
+import '../../../domain/models/field_definition.dart';
+import '../../../domain/models/record.dart';
 import '../fields/controllers/field_list_controller.dart';
 import '../fields/field_list_screen.dart';
 import 'controllers/record_list_controller.dart';
@@ -42,7 +44,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
     }
   }
 
-  void _showCreateScreen(BuildContext context, fields) {
+  void _showCreateScreen(BuildContext context, List<FieldDefinition> fields) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => RecordFormScreen(
@@ -53,7 +55,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
     );
   }
 
-  void _showEditScreen(BuildContext context, record, fields) {
+  void _showEditScreen(BuildContext context, Record record, List<FieldDefinition> fields) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => RecordFormScreen(
@@ -65,10 +67,26 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, record) async {
+  void _showDeleteDialog(BuildContext context, WidgetRef ref, Record record) async {
     final confirmed = await DeleteRecordDialog.show(context);
-    if (confirmed) {
-      ref.read(recordListControllerProvider(widget.database.id).notifier).deleteRecord(record.id);
+    if (confirmed && context.mounted) {
+      try {
+        await ref.read(recordListControllerProvider(widget.database.id).notifier).deleteRecord(record.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Record deleted')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete record: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -80,9 +98,9 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
     );
   }
 
-  void _handleExport(BuildContext context, WidgetRef ref, fields) async {
+  void _handleExport(BuildContext context, WidgetRef ref, List<FieldDefinition> fields) async {
     try {
-      final file = await ref.read(v2ExportControllerProvider.notifier).exportToExcel(widget.database, fields);
+      final file = await ref.read(exportControllerProvider.notifier).exportToExcel(widget.database, fields);
       if (file != null) {
         await SharePlus.instance.share(ShareParams(files: [XFile(file.path)], text: 'Vault Zero Export: ${widget.database.name}'));
         if (context.mounted) {
@@ -304,7 +322,7 @@ class _RecordListScreenState extends ConsumerState<RecordListScreen> {
     );
   }
 
-  Widget _buildNoRecordsState(BuildContext context, ColorScheme colorScheme, ThemeData theme, fields) {
+  Widget _buildNoRecordsState(BuildContext context, ColorScheme colorScheme, ThemeData theme, List<FieldDefinition> fields) {
     return Center(
       key: const ValueKey('no_records'),
       child: Padding(

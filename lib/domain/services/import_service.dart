@@ -90,6 +90,7 @@ class ImportService {
       final rowsStream = source.getRows();
       final batch = <Record>[];
       const batchSize = 500;
+      var rowIndex = 0;
 
       await for (final row in rowsStream) {
         // Skip completely blank rows
@@ -122,12 +123,13 @@ class ImportService {
           );
         }
 
+        final recordCreatedAt = now.add(Duration(milliseconds: rowIndex++));
         batch.add(Record(
           id: recordId,
           databaseId: databaseId,
           values: values,
-          createdAt: now,
-          updatedAt: now,
+          createdAt: recordCreatedAt,
+          updatedAt: recordCreatedAt,
         ));
 
         if (batch.length >= batchSize) {
@@ -142,11 +144,21 @@ class ImportService {
       }
     } catch (e) {
       // Fatal parser/database error. Cleanup.
+      var cleanupFailed = false;
+      Object? cleanupError;
       try {
         await schemaRepository.deleteDatabase(databaseId);
+      } catch (err) {
+        cleanupFailed = true;
+        cleanupError = err;
+      }
+
+      if (cleanupFailed) {
+        throw Exception(
+          'Import failed and partial database cleanup failed. You may need to manually delete the partial database "$databaseName".\nOriginal Error: $e\nCleanup Error: $cleanupError',
+        );
+      } else {
         throw Exception('Import failed. Changes reverted.\nError: $e');
-      } catch (cleanupError) {
-        throw Exception('Import failed and partial database cleanup failed. You may need to manually delete the partial database "$databaseName".\nOriginal Error: $e\nCleanup Error: $cleanupError');
       }
     }
   }

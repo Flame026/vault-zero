@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../domain/models/field_definition.dart';
 import '../../../domain/models/record.dart';
 import 'controllers/record_list_controller.dart';
+import 'widgets/dynamic_field_input.dart';
 
 class RecordFormScreen extends ConsumerStatefulWidget {
   final String databaseId;
@@ -23,57 +24,43 @@ class RecordFormScreen extends ConsumerStatefulWidget {
 
 class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
   final _formKey = GlobalKey<FormState>();
-  
-  // Controllers and FocusNodes for fast entry
-  late final List<TextEditingController> _controllers;
+  late final Map<String, dynamic> _values;
   late final List<FocusNode> _focusNodes;
+  bool _isSaving = false;
 
   @override
   void initState() {
     super.initState();
-    
-    _controllers = List.generate(widget.fields.length, (index) {
-      final field = widget.fields[index];
+    _values = {};
+    for (final field in widget.fields) {
       final fieldValue = widget.initialRecord?.values[field.id];
-      // Format decimal safely to remove trailing zero if needed, otherwise just toString()
-      String textValue = '';
-      if (fieldValue != null && fieldValue.value != null) {
-        if (field.type == FieldType.decimal && fieldValue.value is double) {
-           textValue = fieldValue.value.toString().replaceAll(RegExp(r'\.0$'), '');
-        } else {
-           textValue = fieldValue.value.toString();
-        }
-      }
-      return TextEditingController(text: textValue);
-    });
-
+      _values[field.id] = fieldValue?.value;
+    }
     _focusNodes = List.generate(widget.fields.length, (index) => FocusNode());
   }
 
   @override
   void dispose() {
-    for (final c in _controllers) { c.dispose(); }
-    for (final f in _focusNodes) { f.dispose(); }
+    for (final f in _focusNodes) {
+      f.dispose();
+    }
     super.dispose();
   }
 
   void _onSave() async {
+    if (_isSaving) return;
     if (!_formKey.currentState!.validate()) {
       return;
     }
 
-    final rawValues = <String, dynamic>{};
-    for (int i = 0; i < widget.fields.length; i++) {
-      rawValues[widget.fields[i].id] = _controllers[i].text.trim();
-    }
-
     final controller = ref.read(recordListControllerProvider(widget.databaseId).notifier);
 
+    setState(() => _isSaving = true);
     try {
       await controller.saveRecord(
         existingRecord: widget.initialRecord,
         fields: widget.fields,
-        rawValues: rawValues,
+        rawValues: _values,
       );
 
       if (mounted) {
@@ -87,6 +74,10 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
             backgroundColor: Theme.of(context).colorScheme.error,
           ),
         );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isSaving = false);
       }
     }
   }
@@ -110,8 +101,14 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
                 minimumSize: const Size(64, 36),
                 padding: const EdgeInsets.symmetric(horizontal: 16),
               ),
-              onPressed: _onSave,
-              child: const Text('Save'),
+              onPressed: _isSaving ? null : _onSave,
+              child: _isSaving
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Text('Save'),
             ),
           ),
         ],
@@ -122,7 +119,7 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
         child: Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 600),
+            constraints: const BoxConstraints(maxWidth: 640),
             child: Form(
               key: _formKey,
           child: ListView.builder(
@@ -135,37 +132,30 @@ class _RecordFormScreenState extends ConsumerState<RecordFormScreen> {
 
               return Padding(
                 padding: const EdgeInsets.only(bottom: 24),
-                child: TextFormField(
-                controller: _controllers[index],
-                focusNode: _focusNodes[index],
-                autofocus: index == 0,
-                keyboardType: TextInputType.text,
-                textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: InputDecoration(
-                  labelText: field.name,
+                child: DynamicFieldInput(
+                  field: field,
+                  initialValue: _values[field.id],
+                  focusNode: _focusNodes[index],
+                  autofocus: index == 0,
+                  textInputAction: isLast ? TextInputAction.done : TextInputAction.next,
+                  onFieldSubmitted: (_) {
+                    if (isLast) {
+                      _onSave();
+                    } else {
+                      FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
+                    }
+                  },
+                  onChanged: (val) {
+                    _values[field.id] = val;
+                  },
                 ),
-                onFieldSubmitted: (_) {
-                  if (isLast) {
-                    _onSave();
-                  } else {
-                    FocusScope.of(context).requestFocus(_focusNodes[index + 1]);
-                  }
+              );
                 },
-                validator: (val) {
-                  if (field.isRequired && (val == null || val.trim().isEmpty)) {
-                    return 'This field is required';
-                  }
-                  return null;
-                },
-              ),
-            );
-          },
-        ),
               ),
             ),
           ),
         ),
-      );
+      ),
+    );
   }
 }

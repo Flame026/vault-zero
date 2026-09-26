@@ -7,26 +7,15 @@ import 'tabular_data_source.dart';
 class ExcelDataSource implements TabularDataSource {
   final File file;
   final String? sheetName;
+  Excel? _cachedExcel;
 
   ExcelDataSource(this.file, {this.sheetName});
 
-  /// Decodes and returns all available sheet names in the workbook.
-  Future<List<String>> getSheetNames() async {
-    final bytes = await file.readAsBytes();
-    if (bytes.isEmpty) {
-      throw const FormatException('Excel file is empty.');
-    }
-
-    final excel = Excel.decodeBytes(bytes);
-    final sheets = excel.tables.keys.toList();
-    if (sheets.isEmpty) {
-      throw const FormatException('Workbook contains no sheets.');
-    }
-
-    return sheets;
-  }
-
   Future<Excel> _decodeWorkbook() async {
+    if (_cachedExcel != null) {
+      return _cachedExcel!;
+    }
+
     final bytes = await file.readAsBytes();
     if (bytes.isEmpty) {
       throw const FormatException('Excel file is empty.');
@@ -37,7 +26,19 @@ class ExcelDataSource implements TabularDataSource {
       throw const FormatException('Workbook contains no sheets.');
     }
 
+    _cachedExcel = excel;
     return excel;
+  }
+
+  /// Decodes and returns all available sheet names in the workbook.
+  Future<List<String>> getSheetNames() async {
+    final excel = await _decodeWorkbook();
+    final sheets = excel.tables.keys.toList();
+    if (sheets.isEmpty) {
+      throw const FormatException('Workbook contains no sheets.');
+    }
+
+    return sheets;
   }
 
   Sheet _resolveSheet(Excel excel) {

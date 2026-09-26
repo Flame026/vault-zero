@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../domain/models/database_definition.dart';
 import '../fields/field_list_screen.dart';
 import '../records/record_list_screen.dart';
 import '../settings/settings_screen.dart';
@@ -22,7 +23,7 @@ class DatabaseListScreen extends ConsumerWidget {
     }
   }
 
-  void _showEditDialog(BuildContext context, WidgetRef ref, database) async {
+  void _showEditDialog(BuildContext context, WidgetRef ref, DatabaseDefinition database) async {
     final result = await DatabaseFormDialog.show(context, initialDatabase: database);
     if (result != null) {
       ref.read(databaseListControllerProvider.notifier).updateDatabase(
@@ -33,10 +34,26 @@ class DatabaseListScreen extends ConsumerWidget {
     }
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, database) async {
+  void _showDeleteDialog(BuildContext context, WidgetRef ref, DatabaseDefinition database) async {
     final confirmed = await DeleteConfirmationDialog.show(context, database: database);
-    if (confirmed) {
-      ref.read(databaseListControllerProvider.notifier).deleteDatabase(database.id);
+    if (confirmed && context.mounted) {
+      try {
+        await ref.read(databaseListControllerProvider.notifier).deleteDatabase(database.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Deleted "${database.name}"')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete database: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
     }
   }
 

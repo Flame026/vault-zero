@@ -4,18 +4,53 @@ import 'package:excel/excel.dart' hide Border, TextSpan;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
+import '../../../core/providers.dart';
 import '../../../domain/models/database_definition.dart';
 import '../../../domain/models/field_definition.dart';
+import '../../../domain/models/field_value.dart';
 import '../../../domain/models/record_page.dart';
-import '../../../core/providers.dart';
 
-final v2ExportControllerProvider = AsyncNotifierProvider<V2ExportController, void>(() {
-  return V2ExportController();
+final exportControllerProvider = AsyncNotifierProvider<ExportController, void>(() {
+  return ExportController();
 });
 
-class V2ExportController extends AsyncNotifier<void> {
+// Backward compatibility alias
+final v2ExportControllerProvider = exportControllerProvider;
+
+typedef V2ExportController = ExportController;
+
+class ExportController extends AsyncNotifier<void> {
   @override
   Future<void> build() async {}
+
+  CellValue _formatCellValue(FieldValue? fieldValue) {
+    if (fieldValue == null || fieldValue.value == null) {
+      return TextCellValue('');
+    }
+
+    if (fieldValue is IntegerFieldValue) {
+      return IntCellValue(fieldValue.value);
+    } else if (fieldValue is DecimalFieldValue) {
+      return DoubleCellValue(fieldValue.value);
+    } else if (fieldValue is BooleanFieldValue) {
+      return BoolCellValue(fieldValue.value);
+    } else if (fieldValue is DateFieldValue) {
+      final dt = fieldValue.value;
+      return DateCellValue(year: dt.year, month: dt.month, day: dt.day);
+    } else if (fieldValue is DateTimeFieldValue) {
+      final dt = fieldValue.value;
+      return DateTimeCellValue(
+        year: dt.year,
+        month: dt.month,
+        day: dt.day,
+        hour: dt.hour,
+        minute: dt.minute,
+        second: dt.second,
+      );
+    }
+
+    return TextCellValue(fieldValue.value.toString());
+  }
 
   Future<File?> exportToExcel(DatabaseDefinition database, List<FieldDefinition> fields) async {
     final repository = await ref.read(recordRepositoryProvider.future);
@@ -31,12 +66,13 @@ class V2ExportController extends AsyncNotifier<void> {
     File? generatedFile;
     
     state = await AsyncValue.guard(() async {
-
       final excel = Excel.createExcel();
       
-      // Sanitize sheet name (max 31 chars, no invalid chars)
-      var sheetName = database.name.replaceAll(RegExp(r'[\\/?*\[\]:]'), '_');
-      if (sheetName.length > 31) {
+      // Sanitize sheet name (max 31 chars, no invalid chars, non-empty)
+      var sheetName = database.name.replaceAll(RegExp(r'[\\/?*\[\]:]'), '_').trim();
+      if (sheetName.isEmpty) {
+        sheetName = 'Database';
+      } else if (sheetName.length > 31) {
         sheetName = sheetName.substring(0, 31);
       }
       final sheet = excel[sheetName];
@@ -58,11 +94,7 @@ class V2ExportController extends AsyncNotifier<void> {
           final rowCells = <CellValue>[];
           for (final field in sortedFields) {
             final fieldValue = record.values[field.id];
-            if (fieldValue != null && fieldValue.value != null) {
-              rowCells.add(TextCellValue(fieldValue.value.toString()));
-            } else {
-              rowCells.add(TextCellValue(''));
-            }
+            rowCells.add(_formatCellValue(fieldValue));
           }
           sheet.appendRow(rowCells);
         }
@@ -77,7 +109,10 @@ class V2ExportController extends AsyncNotifier<void> {
         }
       }
 
-      excel.delete('Sheet1');
+      // Only delete the default 'Sheet1' if it is not our target sheet
+      if (sheetName != 'Sheet1') {
+        excel.delete('Sheet1');
+      }
       final bytes = excel.save();
 
       if (bytes == null) {
@@ -88,7 +123,10 @@ class V2ExportController extends AsyncNotifier<void> {
       final now = DateTime.now();
       
       // Sanitize file name
-      final safeDbName = database.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_');
+      var safeDbName = database.name.replaceAll(RegExp(r'[^a-zA-Z0-9_-]'), '_').trim();
+      if (safeDbName.isEmpty) {
+        safeDbName = 'database';
+      }
       final fileName = 'vault_zero_${safeDbName}_${now.year}-${_twoDigits(now.month)}-${_twoDigits(now.day)}_${_twoDigits(now.hour)}-${_twoDigits(now.minute)}-${_twoDigits(now.second)}.xlsx';
       final file = File('${directory.path}/$fileName');
 

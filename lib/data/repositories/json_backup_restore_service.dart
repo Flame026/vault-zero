@@ -15,7 +15,7 @@ class JsonBackupRestoreService implements BackupRestoreService {
   @override
   Future<String> exportVault() async {
     // 1. Fetch Databases
-    final dbRows = await _db.query('databases');
+    final dbRows = await _db.query('databases', orderBy: 'created_at ASC, id ASC');
     final databases = dbRows.map((row) => DatabaseDefinition(
       id: row['id'] as String,
       name: row['name'] as String,
@@ -26,7 +26,7 @@ class JsonBackupRestoreService implements BackupRestoreService {
     )).toList();
 
     // 2. Fetch Fields
-    final fieldRows = await _db.query('fields');
+    final fieldRows = await _db.query('fields', orderBy: 'database_id ASC, position ASC, id ASC');
     final fields = fieldRows.map((row) {
       FieldConfig? config;
       final configStr = row['configuration'] as String?;
@@ -50,7 +50,7 @@ class JsonBackupRestoreService implements BackupRestoreService {
     }).toList();
 
     // 3. Fetch Records
-    final recordRows = await _db.query('records');
+    final recordRows = await _db.query('records', orderBy: 'database_id ASC, created_at ASC, id ASC');
     final recordsData = recordRows.map((row) => {
       'id': row['id'] as String,
       'databaseId': row['database_id'] as String,
@@ -110,7 +110,7 @@ class JsonBackupRestoreService implements BackupRestoreService {
 
     final backup = VaultBackup(
       backupFormatVersion: VaultBackup.currentFormatVersion,
-      appVersion: 'V2.5',
+      appVersion: '1.0.0',
       exportDate: DateTime.now().toUtc(),
       databases: databases,
       fields: fields,
@@ -132,7 +132,7 @@ class JsonBackupRestoreService implements BackupRestoreService {
     final backup = VaultBackup.fromJson(jsonMap);
 
     await _db.transaction((txn) async {
-      // Clear V2 tables
+      // Clear database tables
       await txn.delete('field_values');
       await txn.delete('records');
       await txn.delete('fields');

@@ -6,6 +6,7 @@ import 'package:path/path.dart' as p;
 
 import '../../core/providers.dart';
 import '../../data/importers/csv_data_source.dart';
+import '../databases/controllers/database_list_controller.dart';
 
 class CsvPreviewScreen extends ConsumerStatefulWidget {
   final String filePath;
@@ -90,6 +91,7 @@ class _CsvPreviewScreenState extends ConsumerState<CsvPreviewScreen> {
       // Refresh the root database list
       ref.invalidate(schemaRepositoryProvider);
       ref.invalidate(recordRepositoryProvider);
+      ref.invalidate(databaseListControllerProvider);
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

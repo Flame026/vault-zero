@@ -181,6 +181,68 @@ void main() {
       fields = await schemaRepo.getFieldsForDatabase(dbId);
       expect(fields, isEmpty);
     });
+
+    test('getAllDatabases returns all databases with their respective ordered fields', () async {
+      final db1Id = uuid.v4();
+      final db2Id = uuid.v4();
+
+      await schemaRepo.createDatabase(DatabaseDefinition(
+        id: db1Id,
+        name: 'Database 1',
+        fields: [],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
+      await schemaRepo.createDatabase(DatabaseDefinition(
+        id: db2Id,
+        name: 'Database 2',
+        fields: [],
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
+
+      await schemaRepo.createField(FieldDefinition(
+        id: uuid.v4(),
+        databaseId: db1Id,
+        name: 'DB1 Field 2',
+        type: FieldType.text,
+        position: 1,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
+      await schemaRepo.createField(FieldDefinition(
+        id: uuid.v4(),
+        databaseId: db1Id,
+        name: 'DB1 Field 1',
+        type: FieldType.text,
+        position: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
+      await schemaRepo.createField(FieldDefinition(
+        id: uuid.v4(),
+        databaseId: db2Id,
+        name: 'DB2 Field 1',
+        type: FieldType.boolean,
+        position: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      ));
+
+      final all = await schemaRepo.getAllDatabases();
+      expect(all.length, 2);
+
+      final db1 = all.firstWhere((d) => d.id == db1Id);
+      final db2 = all.firstWhere((d) => d.id == db2Id);
+
+      expect(db1.fields.length, 2);
+      expect(db1.fields[0].name, 'DB1 Field 1');
+      expect(db1.fields[1].name, 'DB1 Field 2');
+
+      expect(db2.fields.length, 1);
+      expect(db2.fields[0].name, 'DB2 Field 1');
+      expect(db2.fields[0].type, FieldType.boolean);
+    });
   });
 
   group('RecordRepository CRUD', () {
@@ -285,6 +347,40 @@ void main() {
 
       final retrieved = await recordRepo.getRecord(recordId);
       expect(retrieved, isNull);
+    });
+
+    test('getRecordsForDatabase retrieves all records with values efficiently', () async {
+      final r1Id = uuid.v4();
+      final r2Id = uuid.v4();
+      final t1 = DateTime(2025, 1, 1, 10, 0);
+      final t2 = DateTime(2025, 1, 1, 11, 0);
+
+      await recordRepo.saveRecord(Record(
+        id: r1Id,
+        databaseId: dbId,
+        values: {
+          fieldId: TextFieldValue(id: uuid.v4(), recordId: r1Id, fieldId: fieldId, value: 'Book 1'),
+        },
+        createdAt: t1,
+        updatedAt: t1,
+      ));
+
+      await recordRepo.saveRecord(Record(
+        id: r2Id,
+        databaseId: dbId,
+        values: {
+          fieldId: TextFieldValue(id: uuid.v4(), recordId: r2Id, fieldId: fieldId, value: 'Book 2'),
+        },
+        createdAt: t2,
+        updatedAt: t2,
+      ));
+
+      final allRecords = await recordRepo.getRecordsForDatabase(dbId);
+      expect(allRecords.length, 2);
+      expect(allRecords[0].id, r1Id);
+      expect((allRecords[0].values[fieldId] as TextFieldValue).value, 'Book 1');
+      expect(allRecords[1].id, r2Id);
+      expect((allRecords[1].values[fieldId] as TextFieldValue).value, 'Book 2');
     });
   });
 

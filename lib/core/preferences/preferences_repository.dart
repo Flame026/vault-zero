@@ -1,20 +1,21 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 
 class PreferencesRepository {
   static const String _preferencesFileName = 'vault_zero_preferences.json';
 
-  Future<File> _getPreferencesFile(String fileName) async {
+  Future<File> _getPreferencesFile([String fileName = _preferencesFileName]) async {
     final directory = await getApplicationDocumentsDirectory();
     return File('${directory.path}/$fileName');
   }
 
   Future<Map<String, dynamic>> loadPreferences() async {
     try {
-      final currentFile = await _getPreferencesFile(_preferencesFileName);
+      final currentFile = await _getPreferencesFile();
 
       if (!await currentFile.exists()) {
         return {};
@@ -24,27 +25,30 @@ class PreferencesRepository {
       final data = jsonDecode(jsonText) as Map<String, dynamic>;
 
       return data;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('Failed to load preferences: $e');
       return {};
     }
   }
 
   Future<void> savePreferences(Map<String, dynamic> data) async {
     try {
-      final file = await _getPreferencesFile(_preferencesFileName);
+      final file = await _getPreferencesFile();
       // Read existing to preserve unknown keys when saving partial updates
       Map<String, dynamic> existing = {};
       if (await file.exists()) {
-         try {
-           final jsonText = await file.readAsString();
-           existing = jsonDecode(jsonText) as Map<String, dynamic>;
-         } catch (_) {}
+        try {
+          final jsonText = await file.readAsString();
+          existing = jsonDecode(jsonText) as Map<String, dynamic>;
+        } catch (_) {}
       }
       
       existing.addAll(data);
 
       await file.writeAsString(jsonEncode(existing), flush: true);
-    } catch (_) {}
+    } catch (e) {
+      debugPrint('Failed to save preferences: $e');
+    }
   }
 }
 

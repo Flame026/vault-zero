@@ -166,4 +166,9 @@ void main() {
       throwsA(isA<StateError>()),
     );
   });
+
+  test('exportControllerProvider alias resolves correctly', () {
+    final exportController = container.read(exportControllerProvider.notifier);
+    expect(exportController, isNotNull);
+  });
 }

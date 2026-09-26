@@ -76,22 +76,26 @@ class SqliteSchemaRepository implements SchemaRepository {
   @override
   Future<List<DatabaseDefinition>> getAllDatabases() async {
     final results = await db.query('databases');
-    final databases = <DatabaseDefinition>[];
+    if (results.isEmpty) return const [];
 
-    for (final row in results) {
+    final fieldRows = await db.query('fields', orderBy: 'position ASC');
+    final Map<String, List<FieldDefinition>> fieldsByDb = {};
+    for (final row in fieldRows) {
+      final dbId = row['database_id'] as String;
+      (fieldsByDb[dbId] ??= []).add(_mapFieldDefinition(row));
+    }
+
+    return results.map((row) {
       final id = row['id'] as String;
-      final fields = await getFieldsForDatabase(id);
-      databases.add(DatabaseDefinition(
+      return DatabaseDefinition(
         id: id,
         name: row['name'] as String,
         description: row['description'] as String,
-        fields: fields,
+        fields: fieldsByDb[id] ?? const [],
         createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
         updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
-      ));
-    }
-
-    return databases;
+      );
+    }).toList();
   }
 
   @override
@@ -165,28 +169,30 @@ class SqliteSchemaRepository implements SchemaRepository {
       orderBy: 'position ASC',
     );
 
-    return results.map((row) {
-      final configJson = row['configuration'] as String?;
-      FieldConfig? config;
-      if (configJson != null) {
-        final map = jsonDecode(configJson) as Map<String, dynamic>;
-        if (map.containsKey('options')) {
-          config = ChoiceConfig(options: List<String>.from(map['options'] as List));
-        }
-      }
+    return results.map(_mapFieldDefinition).toList();
+  }
 
-      return FieldDefinition(
-        id: row['id'] as String,
-        databaseId: row['database_id'] as String,
-        name: row['name'] as String,
-        type: FieldType.values.firstWhere((e) => e.name == row['type']),
-        position: row['position'] as int,
-        isRequired: (row['is_required'] as int) == 1,
-        configuration: config,
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
-      );
-    }).toList();
+  FieldDefinition _mapFieldDefinition(Map<String, Object?> row) {
+    final configJson = row['configuration'] as String?;
+    FieldConfig? config;
+    if (configJson != null) {
+      final map = jsonDecode(configJson) as Map<String, dynamic>;
+      if (map.containsKey('options')) {
+        config = ChoiceConfig(options: List<String>.from(map['options'] as List));
+      }
+    }
+
+    return FieldDefinition(
+      id: row['id'] as String,
+      databaseId: row['database_id'] as String,
+      name: row['name'] as String,
+      type: FieldType.values.firstWhere((e) => e.name == row['type']),
+      position: row['position'] as int,
+      isRequired: (row['is_required'] as int) == 1,
+      configuration: config,
+      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
+    );
   }
 
   Future<void> _insertField(DatabaseExecutor executor, FieldDefinition field) async {

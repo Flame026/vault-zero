@@ -8,12 +8,20 @@ class DynamicFieldInput extends StatefulWidget {
   final FieldDefinition field;
   final dynamic initialValue;
   final ValueChanged<dynamic> onChanged;
+  final FocusNode? focusNode;
+  final TextInputAction? textInputAction;
+  final ValueChanged<String>? onFieldSubmitted;
+  final bool autofocus;
 
   const DynamicFieldInput({
     super.key,
     required this.field,
     required this.initialValue,
     required this.onChanged,
+    this.focusNode,
+    this.textInputAction,
+    this.onFieldSubmitted,
+    this.autofocus = false,
   });
 
   @override
@@ -61,6 +69,10 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
   Widget _buildText(bool isLong) {
     return TextFormField(
       controller: _textController,
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
+      textInputAction: isLong ? TextInputAction.newline : widget.textInputAction,
+      onFieldSubmitted: widget.onFieldSubmitted,
       decoration: InputDecoration(
         labelText: widget.field.name,
         alignLabelWithHint: isLong,
@@ -78,6 +90,10 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
   Widget _buildNumber(bool isDecimal) {
     return TextFormField(
       controller: _textController,
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
+      textInputAction: widget.textInputAction,
+      onFieldSubmitted: widget.onFieldSubmitted,
       decoration: InputDecoration(
         labelText: widget.field.name,
       ),
@@ -116,6 +132,8 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
 
   Widget _buildBoolean() {
     return SwitchListTile(
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
       title: Text(widget.field.name),
       value: (_currentValue as bool?) ?? false,
       onChanged: (val) {
@@ -212,10 +230,12 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
     final String? safeValue = options.contains(_currentValue) ? _currentValue as String : null;
 
     return DropdownButtonFormField<String>(
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
       decoration: InputDecoration(
         labelText: widget.field.name,
       ),
-      initialValue: safeValue,
+      value: safeValue,
       items: [
         if (!widget.field.isRequired)
           const DropdownMenuItem<String>(

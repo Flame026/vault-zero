@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../domain/models/database_definition.dart';
+import '../../../domain/models/field_definition.dart';
 import 'controllers/field_list_controller.dart';
 import 'field_form_screen.dart';
 import 'widgets/delete_field_dialog.dart';
@@ -20,7 +21,7 @@ class FieldListScreen extends ConsumerWidget {
     );
   }
 
-  void _showEditScreen(BuildContext context, field) {
+  void _showEditScreen(BuildContext context, FieldDefinition field) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (context) => FieldFormScreen(
@@ -31,10 +32,26 @@ class FieldListScreen extends ConsumerWidget {
     );
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, field) async {
+  void _showDeleteDialog(BuildContext context, WidgetRef ref, FieldDefinition field) async {
     final confirmed = await DeleteFieldDialog.show(context, field: field);
-    if (confirmed) {
-      ref.read(fieldListControllerProvider(database.id).notifier).deleteField(field.id);
+    if (confirmed && context.mounted) {
+      try {
+        await ref.read(fieldListControllerProvider(database.id).notifier).deleteField(field.id);
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Field "${field.name}" deleted')),
+          );
+        }
+      } catch (e) {
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete field: $e'),
+              backgroundColor: Theme.of(context).colorScheme.error,
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -67,7 +84,7 @@ class FieldListScreen extends ConsumerWidget {
                   child: ReorderableListView.builder(
                     padding: const EdgeInsets.all(16),
                     itemCount: fields.length,
-                    onReorderItem: (oldIndex, newIndex) {
+                    onReorder: (oldIndex, newIndex) {
                       ref.read(fieldListControllerProvider(database.id).notifier).reorderFields(oldIndex, newIndex);
                     },
                     itemBuilder: (context, index) {
