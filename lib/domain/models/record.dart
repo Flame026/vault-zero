@@ -6,7 +6,7 @@ class Record {
   final Map<String, FieldValue> values;
   final DateTime createdAt;
   final DateTime updatedAt;
-  
+
   const Record({
     required this.id,
     required this.databaseId,

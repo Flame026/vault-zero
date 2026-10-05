@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/theme/design_tokens.dart';
 import '../../../domain/models/field_definition.dart';
+import '../../common/widgets/vault_card.dart';
 
 class DynamicFieldInput extends StatefulWidget {
   final FieldDefinition field;
@@ -37,14 +39,16 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
     super.initState();
     _currentValue = widget.initialValue;
 
-    if (widget.field.type == FieldType.text || 
+    if (widget.field.type == FieldType.text ||
         widget.field.type == FieldType.longText ||
         widget.field.type == FieldType.integer ||
         widget.field.type == FieldType.decimal) {
       if (_currentValue != null && _currentValue.toString().isNotEmpty) {
-        // Format decimal nicely without trailing zeros if possible
         if (widget.field.type == FieldType.decimal && _currentValue is double) {
-          _textController.text = _currentValue.toString().replaceAll(RegExp(r'\.0$'), '');
+          _textController.text = _currentValue.toString().replaceAll(
+            RegExp(r'\.0$'),
+            '',
+          );
         } else {
           _textController.text = _currentValue.toString();
         }
@@ -62,7 +66,9 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
     if (!widget.field.isRequired) return null;
 
     if (value == null) return 'This field is required';
-    if (value is String && value.trim().isEmpty) return 'This field is required';
+    if (value is String && value.trim().isEmpty) {
+      return 'This field is required';
+    }
     return null;
   }
 
@@ -71,17 +77,41 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
       controller: _textController,
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
-      textInputAction: isLong ? TextInputAction.newline : widget.textInputAction,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      scrollPadding: const EdgeInsets.all(AppSpacing.xxl),
+      textInputAction: isLong
+          ? TextInputAction.newline
+          : widget.textInputAction,
       onFieldSubmitted: widget.onFieldSubmitted,
       decoration: InputDecoration(
         labelText: widget.field.name,
         alignLabelWithHint: isLong,
+        errorMaxLines: 2,
+        prefixIcon: Icon(
+          isLong ? Icons.notes_rounded : Icons.text_fields_rounded,
+          size: 20,
+        ),
+        helperText: widget.field.isRequired ? 'Required' : null,
+        suffixIcon: (!isLong && _textController.text.isNotEmpty)
+            ? IconButton(
+                icon: const Icon(Icons.clear_rounded, size: 18),
+                tooltip: 'Clear ${widget.field.name}',
+                onPressed: () {
+                  _textController.clear();
+                  _currentValue = '';
+                  widget.onChanged('');
+                  setState(() {});
+                },
+              )
+            : null,
       ),
-      maxLines: isLong ? 5 : 1,
+      minLines: isLong ? 3 : 1,
+      maxLines: isLong ? 6 : 1,
       textCapitalization: TextCapitalization.sentences,
       onChanged: (val) {
         _currentValue = val;
         widget.onChanged(val);
+        setState(() {});
       },
       validator: _validateRequired,
     );
@@ -92,10 +122,30 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
       controller: _textController,
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      scrollPadding: const EdgeInsets.all(AppSpacing.xxl),
       textInputAction: widget.textInputAction,
       onFieldSubmitted: widget.onFieldSubmitted,
       decoration: InputDecoration(
         labelText: widget.field.name,
+        errorMaxLines: 2,
+        prefixIcon: Icon(
+          isDecimal ? Icons.tag_rounded : Icons.numbers_rounded,
+          size: 20,
+        ),
+        helperText: widget.field.isRequired ? 'Required' : null,
+        suffixIcon: _textController.text.isNotEmpty
+            ? IconButton(
+                icon: const Icon(Icons.clear_rounded, size: 18),
+                tooltip: 'Clear ${widget.field.name}',
+                onPressed: () {
+                  _textController.clear();
+                  _currentValue = null;
+                  widget.onChanged(null);
+                  setState(() {});
+                },
+              )
+            : null,
       ),
       keyboardType: TextInputType.numberWithOptions(decimal: isDecimal),
       inputFormatters: [
@@ -106,24 +156,40 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
         if (val.isEmpty) {
           _currentValue = null;
           widget.onChanged(null);
+          setState(() {});
           return;
         }
         if (isDecimal) {
           final doubleVal = double.tryParse(val);
-          _currentValue = doubleVal;
-          widget.onChanged(doubleVal);
+          if (doubleVal != null && doubleVal.isFinite) {
+            _currentValue = doubleVal;
+            widget.onChanged(doubleVal);
+          } else {
+            _currentValue = null;
+            widget.onChanged(null);
+          }
         } else {
           final intVal = int.tryParse(val);
           _currentValue = intVal;
           widget.onChanged(intVal);
         }
+        setState(() {});
       },
       validator: (val) {
         final req = _validateRequired(val);
-        if (req != null) return req;
+        if (req != null) {
+          return req;
+        }
         if (val != null && val.isNotEmpty) {
-          if (isDecimal && double.tryParse(val) == null) return 'Invalid decimal';
-          if (!isDecimal && int.tryParse(val) == null) return 'Invalid integer';
+          if (isDecimal) {
+            final parsed = double.tryParse(val);
+            if (parsed == null || !parsed.isFinite) {
+              return 'Invalid decimal';
+            }
+          }
+          if (!isDecimal && int.tryParse(val) == null) {
+            return 'Invalid integer';
+          }
         }
         return null;
       },
@@ -131,18 +197,47 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
   }
 
   Widget _buildBoolean() {
-    return SwitchListTile(
-      focusNode: widget.focusNode,
-      autofocus: widget.autofocus,
-      title: Text(widget.field.name),
-      value: (_currentValue as bool?) ?? false,
-      onChanged: (val) {
-        setState(() {
-          _currentValue = val;
-        });
-        widget.onChanged(val);
-      },
-      contentPadding: EdgeInsets.zero,
+    final colorScheme = Theme.of(context).colorScheme;
+    final isChecked = (_currentValue as bool?) ?? false;
+
+    return VaultCard(
+      padding: EdgeInsets.zero,
+      child: SwitchListTile(
+        focusNode: widget.focusNode,
+        autofocus: widget.autofocus,
+        secondary: Container(
+          padding: const EdgeInsets.all(AppSpacing.sm),
+          decoration: BoxDecoration(
+            color: isChecked
+                ? colorScheme.primaryContainer.withValues(alpha: 0.6)
+                : colorScheme.surfaceContainer,
+            borderRadius: AppRadius.radiusSm,
+          ),
+          child: Icon(
+            Icons.toggle_on_outlined,
+            size: 20,
+            color: isChecked
+                ? colorScheme.primary
+                : colorScheme.onSurfaceVariant,
+          ),
+        ),
+        title: Text(
+          widget.field.name,
+          style: const TextStyle(fontWeight: FontWeight.w500),
+        ),
+        subtitle: widget.field.isRequired ? const Text('Required') : null,
+        value: isChecked,
+        onChanged: (val) {
+          setState(() {
+            _currentValue = val;
+          });
+          widget.onChanged(val);
+        },
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: AppSpacing.md,
+          vertical: AppSpacing.xs,
+        ),
+      ),
     );
   }
 
@@ -157,7 +252,9 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
       lastDate: DateTime(2100),
     );
 
-    if (pickedDate == null) return;
+    if (pickedDate == null || !mounted) {
+      return;
+    }
 
     if (!includeTime) {
       setState(() {
@@ -167,14 +264,14 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
       return;
     }
 
-    if (!mounted) return;
-
     final pickedTime = await showTimePicker(
       context: context,
       initialTime: TimeOfDay.fromDateTime(initialDate),
     );
 
-    if (pickedTime == null) return;
+    if (pickedTime == null || !mounted) {
+      return;
+    }
 
     final finalDateTime = DateTime(
       pickedDate.year,
@@ -192,60 +289,116 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
 
   Widget _buildDateTime(bool includeTime) {
     final String displayValue;
-    if (_currentValue is DateTime && (_currentValue as DateTime).year > 1970) {
-      if (includeTime) {
-        displayValue = DateFormat.yMd().add_jm().format(_currentValue as DateTime);
-      } else {
-        displayValue = DateFormat.yMMMd().format(_currentValue as DateTime);
-      }
+    if (_currentValue is DateTime) {
+      final dt = _currentValue as DateTime;
+      displayValue = includeTime
+          ? DateFormat.yMd().add_jm().format(dt)
+          : DateFormat.yMMMd().format(dt);
     } else {
       displayValue = '';
     }
 
-    return InkWell(
-      onTap: () => _pickDate(includeTime),
-      child: IgnorePointer(
-        child: TextFormField(
-          key: ValueKey(displayValue), // Force rebuild when text changes without controller
-          initialValue: displayValue,
-          decoration: InputDecoration(
-            labelText: widget.field.name,
-            suffixIcon: Icon(includeTime ? Icons.access_time : Icons.calendar_today),
+    return FormField<DateTime>(
+      initialValue: _currentValue as DateTime?,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      validator: _validateRequired,
+      builder: (state) {
+        return Semantics(
+          button: true,
+          label:
+              'Select ${includeTime ? "date and time" : "date"} for ${widget.field.name}',
+          child: InkWell(
+            focusNode: widget.focusNode,
+            autofocus: widget.autofocus,
+            onTap: () => _pickDate(includeTime),
+            borderRadius: AppRadius.radiusMd,
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: widget.field.name,
+                errorMaxLines: 2,
+                prefixIcon: Icon(
+                  includeTime
+                      ? Icons.access_time_rounded
+                      : Icons.calendar_today_rounded,
+                  size: 20,
+                ),
+                helperText: widget.field.isRequired ? 'Required' : null,
+                errorText: state.errorText,
+                suffixIcon: displayValue.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear_rounded, size: 18),
+                        tooltip: 'Clear ${widget.field.name}',
+                        onPressed: () {
+                          setState(() {
+                            _currentValue = null;
+                          });
+                          state.didChange(null);
+                          widget.onChanged(null);
+                        },
+                      )
+                    : null,
+              ),
+              child: Text(
+                displayValue.isEmpty ? 'Select date' : displayValue,
+                style: TextStyle(
+                  color: displayValue.isEmpty
+                      ? Theme.of(context).hintColor
+                      : Theme.of(context).colorScheme.onSurface,
+                ),
+              ),
+            ),
           ),
-          validator: (val) {
-            if (widget.field.isRequired && (_currentValue == null || (_currentValue as DateTime).year <= 1970)) {
-              return 'This field is required';
-            }
-            return null;
-          },
-        ),
-      ),
+        );
+      },
     );
   }
 
   Widget _buildChoice() {
-    final config = widget.field.configuration as ChoiceConfig?;
-    final options = config?.options ?? [];
+    final config = widget.field.configuration;
+    List<String> options = [];
+    if (config is ChoiceConfig) {
+      options = config.options;
+    }
 
-    final String? safeValue = options.contains(_currentValue) ? _currentValue as String : null;
+    final selectedValue = options.contains(_currentValue)
+        ? _currentValue as String?
+        : null;
 
     return DropdownButtonFormField<String>(
+      key: ValueKey('dropdown_${widget.field.id}_$selectedValue'),
       focusNode: widget.focusNode,
       autofocus: widget.autofocus,
+      autovalidateMode: AutovalidateMode.onUserInteraction,
+      initialValue: selectedValue,
+      borderRadius: AppRadius.radiusMd,
       decoration: InputDecoration(
         labelText: widget.field.name,
+        errorMaxLines: 2,
+        prefixIcon: const Icon(Icons.list_rounded, size: 20),
+        helperText: widget.field.isRequired ? 'Required' : null,
+        suffixIcon: (!widget.field.isRequired && selectedValue != null)
+            ? IconButton(
+                icon: const Icon(Icons.clear_rounded, size: 18),
+                tooltip: 'Clear ${widget.field.name}',
+                onPressed: () {
+                  setState(() {
+                    _currentValue = null;
+                  });
+                  widget.onChanged(null);
+                },
+              )
+            : null,
       ),
-      value: safeValue,
       items: [
         if (!widget.field.isRequired)
           const DropdownMenuItem<String>(
             value: null,
-            child: Text('None'),
+            child: Text('None', style: TextStyle(fontStyle: FontStyle.italic)),
           ),
-        ...options.map((option) {
+        ...options.map((opt) {
           return DropdownMenuItem<String>(
-            value: option,
-            child: Text(option),
+            value: opt,
+            child: Text(opt, overflow: TextOverflow.ellipsis),
           );
         }),
       ],
@@ -255,7 +408,12 @@ class _DynamicFieldInputState extends State<DynamicFieldInput> {
         });
         widget.onChanged(val);
       },
-      validator: _validateRequired,
+      validator: (val) {
+        if (widget.field.isRequired && (val == null || val.isEmpty)) {
+          return 'This field is required';
+        }
+        return null;
+      },
     );
   }
 

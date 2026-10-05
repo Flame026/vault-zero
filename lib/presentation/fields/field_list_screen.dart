@@ -1,8 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/theme/design_tokens.dart';
 import '../../../domain/models/database_definition.dart';
 import '../../../domain/models/field_definition.dart';
+import '../common/widgets/vault_app_bar.dart';
+import '../common/widgets/vault_empty_state.dart';
+import '../common/widgets/vault_error_view.dart';
+import '../common/widgets/vault_snackbar.dart';
+import '../common/error_sanitizer.dart';
+import '../databases/controllers/database_list_controller.dart';
 import 'controllers/field_list_controller.dart';
 import 'field_form_screen.dart';
 import 'widgets/delete_field_dialog.dart';
@@ -24,31 +31,31 @@ class FieldListScreen extends ConsumerWidget {
   void _showEditScreen(BuildContext context, FieldDefinition field) {
     Navigator.of(context).push(
       MaterialPageRoute(
-        builder: (context) => FieldFormScreen(
-          databaseId: database.id,
-          initialField: field,
-        ),
+        builder: (context) =>
+            FieldFormScreen(databaseId: database.id, initialField: field),
       ),
     );
   }
 
-  void _showDeleteDialog(BuildContext context, WidgetRef ref, FieldDefinition field) async {
+  void _showDeleteDialog(
+    BuildContext context,
+    WidgetRef ref,
+    FieldDefinition field,
+  ) async {
     final confirmed = await DeleteFieldDialog.show(context, field: field);
     if (confirmed && context.mounted) {
       try {
-        await ref.read(fieldListControllerProvider(database.id).notifier).deleteField(field.id);
+        await ref
+            .read(fieldListControllerProvider(database.id).notifier)
+            .deleteField(field.id);
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Field "${field.name}" deleted')),
-          );
+          VaultSnackbar.showSuccess(context, 'Field "${field.name}" deleted');
         }
       } catch (e) {
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to delete field: $e'),
-              backgroundColor: Theme.of(context).colorScheme.error,
-            ),
+          VaultSnackbar.showError(
+            context,
+            'Failed to delete field: ${sanitizeErrorMessage(e)}',
           );
         }
       }
@@ -57,20 +64,42 @@ class FieldListScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final dbs = ref.watch(databaseListControllerProvider).valueOrNull;
+    final currentDb =
+        dbs?.firstWhere((d) => d.id == database.id, orElse: () => database) ??
+        database;
+
     final state = ref.watch(fieldListControllerProvider(database.id));
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
+    final subtitleText = state.maybeWhen(
+      data: (fields) => fields.isNotEmpty
+          ? '${fields.length} ${fields.length == 1 ? 'field' : 'fields'} defined'
+          : 'Database Schema Definition',
+      orElse: () => 'Database Schema Definition',
+    );
+
     return Scaffold(
-      appBar: AppBar(
-        title: Text('${database.name} Fields'),
+      appBar: VaultAppBar(
+        title: '${currentDb.name} Fields',
+        subtitle: subtitleText,
       ),
       body: AnimatedSwitcher(
-        duration: const Duration(milliseconds: 300),
+        duration: AppDurations.normal,
         child: state.when(
           data: (fields) {
             if (fields.isEmpty) {
-              return _buildEmptyState(context);
+              return VaultEmptyState(
+                scrollKey: const ValueKey('empty'),
+                icon: Icons.schema_rounded,
+                title: 'Database Schema',
+                message:
+                    "This database has no fields.\nAdd fields to define what you want to track.",
+                actionLabel: 'Add Field',
+                actionIcon: Icons.add_rounded,
+                onAction: () => _showCreateScreen(context),
+              );
             }
             return RefreshIndicator(
               key: const ValueKey('data'),
@@ -81,24 +110,83 @@ class FieldListScreen extends ConsumerWidget {
                 alignment: Alignment.topCenter,
                 child: ConstrainedBox(
                   constraints: const BoxConstraints(maxWidth: 720),
-                  child: ReorderableListView.builder(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: fields.length,
-                    onReorder: (oldIndex, newIndex) {
-                      ref.read(fieldListControllerProvider(database.id).notifier).reorderFields(oldIndex, newIndex);
-                    },
-                    itemBuilder: (context, index) {
-                      final field = fields[index];
-                      return Padding(
-                        key: ValueKey(field.id),
-                        padding: const EdgeInsets.only(bottom: 12),
-                        child: FieldCard(
-                          field: field,
-                          onEdit: () => _showEditScreen(context, field),
-                          onDelete: () => _showDeleteDialog(context, ref, field),
+                  child: Column(
+                    children: [
+                      // Subdued schema guidance bar
+                      Container(
+                        margin: const EdgeInsets.fromLTRB(
+                          AppSpacing.lg,
+                          AppSpacing.md,
+                          AppSpacing.lg,
+                          AppSpacing.xs,
                         ),
-                      );
-                    },
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surfaceContainerHigh.withValues(
+                            alpha: 0.5,
+                          ),
+                          borderRadius: AppRadius.radiusMd,
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withValues(
+                              alpha: 0.3,
+                            ),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.info_outline_rounded,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'Drag to reorder. The top field serves as the title in record lists.',
+                                style: theme.textTheme.bodySmall?.copyWith(
+                                  color: colorScheme.onSurfaceVariant,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: ReorderableListView.builder(
+                          key: PageStorageKey('field_list_${database.id}'),
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          itemCount: fields.length,
+                          onReorderItem: (oldIndex, newIndex) {
+                            ref
+                                .read(
+                                  fieldListControllerProvider(
+                                    database.id,
+                                  ).notifier,
+                                )
+                                .reorderFields(oldIndex, newIndex);
+                          },
+                          itemBuilder: (context, index) {
+                            final field = fields[index];
+                            return Padding(
+                              key: ValueKey(field.id),
+                              padding: const EdgeInsets.only(
+                                bottom: AppSpacing.md,
+                              ),
+                              child: FieldCard(
+                                field: field,
+                                onEdit: () => _showEditScreen(context, field),
+                                onDelete: () =>
+                                    _showDeleteDialog(context, ref, field),
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),
@@ -106,105 +194,26 @@ class FieldListScreen extends ConsumerWidget {
           },
           loading: () => const Center(
             key: ValueKey('loading'),
-            child: CircularProgressIndicator(),
-          ),
-          error: (error, stack) => Center(
-            key: const ValueKey('error'),
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: colorScheme.errorContainer.withValues(alpha: 0.5),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      Icons.error_outline_rounded,
-                      size: 48,
-                      color: colorScheme.error,
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    'Failed to load fields',
-                    style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    error.toString(),
-                    style: theme.textTheme.bodyMedium?.copyWith(color: colorScheme.error),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 24),
-                  FilledButton.icon(
-                    onPressed: () => ref.invalidate(fieldListControllerProvider(database.id)),
-                    icon: const Icon(Icons.refresh_rounded),
-                    label: const Text('Retry'),
-                  ),
-                ],
-              ),
+            child: SizedBox(
+              width: 32,
+              height: 32,
+              child: CircularProgressIndicator(strokeWidth: 3),
             ),
+          ),
+          error: (error, stack) => VaultErrorView(
+            scrollKey: const ValueKey('error'),
+            title: 'Failed to load fields',
+            message: error.toString(),
+            onRetry: () =>
+                ref.invalidate(fieldListControllerProvider(database.id)),
           ),
         ),
       ),
       floatingActionButton: FloatingActionButton.extended(
+        tooltip: 'Create new field',
         onPressed: () => _showCreateScreen(context),
         icon: const Icon(Icons.add_rounded),
         label: const Text('New Field'),
-      ),
-    );
-  }
-
-  Widget _buildEmptyState(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Center(
-      key: const ValueKey('empty'),
-      child: Padding(
-        padding: const EdgeInsets.all(32.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 88,
-              height: 88,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer.withValues(alpha: 0.45),
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Icon(
-                Icons.schema_rounded,
-                size: 44,
-                color: colorScheme.primary,
-              ),
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'Database Schema',
-              style: theme.textTheme.headlineSmall?.copyWith(
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              "This database has no fields.\nAdd fields to define what you want to track.",
-              style: theme.textTheme.bodyLarge?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: () => _showCreateScreen(context),
-              icon: const Icon(Icons.add_rounded),
-              label: const Text('Add Field'),
-            ),
-          ],
-        ),
       ),
     );
   }

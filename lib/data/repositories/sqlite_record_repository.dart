@@ -11,21 +11,60 @@ class SqliteRecordRepository implements RecordRepository {
 
   SqliteRecordRepository(this.db);
 
+  static FieldType _parseFieldType(
+    String? typeName, {
+    String? fieldId,
+    bool strict = false,
+  }) {
+    final type = FieldType.values.where((e) => e.name == typeName).firstOrNull;
+    if (type == null) {
+      if (strict) {
+        throw ArgumentError(
+          'Unrecognized field type "$typeName"${fieldId != null ? " for field $fieldId" : ""}',
+        );
+      }
+      return FieldType.text;
+    }
+    return type;
+  }
+
   @override
   Future<void> saveRecord(Record record) async {
     await db.transaction((txn) async {
-      // Upsert record
-      final recordExists = Sqflite.firstIntValue(await txn.rawQuery('SELECT COUNT(*) FROM records WHERE id = ?', [record.id]))! > 0;
-      
-      if (recordExists) {
-        await txn.update(
-          'records',
-          {
-            'updated_at': record.updatedAt.millisecondsSinceEpoch,
-          },
-          where: 'id = ?',
-          whereArgs: [record.id],
-        );
+      // Optimistic update: attempt update first, insert only if no record updated
+      final updatedCount = await txn.update(
+        'records',
+        {'updated_at': record.updatedAt.millisecondsSinceEpoch},
+        where: 'id = ?',
+        whereArgs: [record.id],
+      );
+
+      // Validate database existence
+      final dbExists = await txn.query(
+        'databases',
+        where: 'id = ?',
+        whereArgs: [record.databaseId],
+        limit: 1,
+      );
+      if (dbExists.isEmpty) {
+        throw ArgumentError('Database ${record.databaseId} does not exist');
+      }
+
+      if (updatedCount > 0) {
+        if (record.values.isEmpty) {
+          await txn.delete(
+            'field_values',
+            where: 'record_id = ?',
+            whereArgs: [record.id],
+          );
+        } else {
+          final placeholders = List.filled(record.values.length, '?').join(',');
+          await txn.delete(
+            'field_values',
+            where: 'record_id = ? AND field_id NOT IN ($placeholders)',
+            whereArgs: [record.id, ...record.values.keys],
+          );
+        }
       } else {
         await txn.insert('records', {
           'id': record.id,
@@ -41,9 +80,14 @@ class SqliteRecordRepository implements RecordRepository {
         where: 'database_id = ?',
         whereArgs: [record.databaseId],
       );
-      
+
       final Map<String, FieldType> dbFields = {
-        for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+        for (var row in fields)
+          row['id'] as String: _parseFieldType(
+            row['type'] as String?,
+            fieldId: row['id'] as String?,
+            strict: true,
+          ),
       };
 
       for (final valueEntry in record.values.entries) {
@@ -52,12 +96,16 @@ class SqliteRecordRepository implements RecordRepository {
 
         // Validation 1: Field belongs to the database
         if (!dbFields.containsKey(fieldId)) {
-          throw ArgumentError('Field $fieldId does not belong to database ${record.databaseId}');
+          throw ArgumentError(
+            'Field $fieldId does not belong to database ${record.databaseId}',
+          );
         }
 
         // Validation 2: Field value matches field type
         if (fieldValue.fieldType != dbFields[fieldId]) {
-          throw ArgumentError('Type mismatch for field $fieldId. Expected ${dbFields[fieldId]}, got ${fieldValue.fieldType}');
+          throw ArgumentError(
+            'Type mismatch for field $fieldId. Expected ${dbFields[fieldId]}, got ${fieldValue.fieldType}',
+          );
         }
 
         final Map<String, dynamic> valueRow = {
@@ -113,29 +161,40 @@ class SqliteRecordRepository implements RecordRepository {
       final Map<String, Map<String, FieldType>> cachedDbFields = {};
 
       for (final dbId in dbIds) {
+        final dbExists = await txn.query(
+          'databases',
+          where: 'id = ?',
+          whereArgs: [dbId],
+          limit: 1,
+        );
+        if (dbExists.isEmpty) {
+          throw ArgumentError('Database $dbId does not exist');
+        }
+
         final fields = await txn.query(
           'fields',
           where: 'database_id = ?',
           whereArgs: [dbId],
         );
         cachedDbFields[dbId] = {
-          for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+          for (var row in fields)
+            row['id'] as String: _parseFieldType(
+              row['type'] as String?,
+              fieldId: row['id'] as String?,
+              strict: true,
+            ),
         };
       }
 
       final batch = txn.batch();
 
       for (final record in records) {
-        batch.insert(
-          'records',
-          {
-            'id': record.id,
-            'database_id': record.databaseId,
-            'created_at': record.createdAt.millisecondsSinceEpoch,
-            'updated_at': record.updatedAt.millisecondsSinceEpoch,
-          },
-          conflictAlgorithm: ConflictAlgorithm.replace,
-        );
+        batch.insert('records', {
+          'id': record.id,
+          'database_id': record.databaseId,
+          'created_at': record.createdAt.millisecondsSinceEpoch,
+          'updated_at': record.updatedAt.millisecondsSinceEpoch,
+        }, conflictAlgorithm: ConflictAlgorithm.replace);
 
         final dbFields = cachedDbFields[record.databaseId]!;
 
@@ -145,12 +204,16 @@ class SqliteRecordRepository implements RecordRepository {
 
           // Validation 1: Field belongs to the database
           if (!dbFields.containsKey(fieldId)) {
-            throw ArgumentError('Field $fieldId does not belong to database ${record.databaseId}');
+            throw ArgumentError(
+              'Field $fieldId does not belong to database ${record.databaseId}',
+            );
           }
 
           // Validation 2: Field value matches field type
           if (fieldValue.fieldType != dbFields[fieldId]) {
-            throw ArgumentError('Type mismatch for field $fieldId. Expected ${dbFields[fieldId]}, got ${fieldValue.fieldType}');
+            throw ArgumentError(
+              'Type mismatch for field $fieldId. Expected ${dbFields[fieldId]}, got ${fieldValue.fieldType}',
+            );
           }
 
           final Map<String, dynamic> valueRow = {
@@ -180,7 +243,8 @@ class SqliteRecordRepository implements RecordRepository {
           } else if (fieldValue is DateFieldValue) {
             valueRow['date_value'] = fieldValue.value.millisecondsSinceEpoch;
           } else if (fieldValue is DateTimeFieldValue) {
-            valueRow['date_time_value'] = fieldValue.value.millisecondsSinceEpoch;
+            valueRow['date_time_value'] =
+                fieldValue.value.millisecondsSinceEpoch;
           } else if (fieldValue is ChoiceFieldValue) {
             valueRow['choice_value'] = fieldValue.value;
           }
@@ -199,20 +263,15 @@ class SqliteRecordRepository implements RecordRepository {
 
   @override
   Future<void> deleteRecord(String id) async {
-    await db.delete(
-      'records',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.transaction((txn) async {
+      await txn.delete('field_values', where: 'record_id = ?', whereArgs: [id]);
+      await txn.delete('records', where: 'id = ?', whereArgs: [id]);
+    });
   }
 
   @override
   Future<Record?> getRecord(String id) async {
-    final results = await db.query(
-      'records',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    final results = await db.query('records', where: 'id = ?', whereArgs: [id]);
 
     if (results.isEmpty) return null;
 
@@ -248,7 +307,11 @@ class SqliteRecordRepository implements RecordRepository {
     );
 
     final Map<String, FieldType> dbFields = {
-      for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+      for (var row in fields)
+        row['id'] as String: _parseFieldType(
+          row['type'] as String?,
+          fieldId: row['id'] as String?,
+        ),
     };
 
     final valueResults = await db.rawQuery(
@@ -268,10 +331,18 @@ class SqliteRecordRepository implements RecordRepository {
       final recordId = row['record_id'] as String;
       final fieldId = row['field_id'] as String;
       final type = dbFields[fieldId];
-      if (type == null) continue;
+      if (type == null) {
+        continue;
+      }
 
       final id = row['id'] as String;
-      groupedValues[recordId]?[fieldId] = _mapFieldValue(type, id, recordId, fieldId, row);
+      groupedValues[recordId]?[fieldId] = _mapFieldValue(
+        type,
+        id,
+        recordId,
+        fieldId,
+        row,
+      );
     }
 
     return results.map((row) {
@@ -280,8 +351,12 @@ class SqliteRecordRepository implements RecordRepository {
         id: id,
         databaseId: databaseId,
         values: groupedValues[id] ?? {},
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          row['created_at'] as int,
+        ),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(
+          row['updated_at'] as int,
+        ),
       );
     }).toList();
   }
@@ -326,7 +401,11 @@ class SqliteRecordRepository implements RecordRepository {
     );
 
     final Map<String, FieldType> dbFields = {
-      for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
+      for (var row in fields)
+        row['id'] as String: _parseFieldType(
+          row['type'] as String?,
+          fieldId: row['id'] as String?,
+        ),
     };
 
     final recordIds = pageResults.map((r) => r['id'] as String).toList();
@@ -347,10 +426,18 @@ class SqliteRecordRepository implements RecordRepository {
       final recordId = row['record_id'] as String;
       final fieldId = row['field_id'] as String;
       final type = dbFields[fieldId];
-      if (type == null) continue;
+      if (type == null) {
+        continue;
+      }
 
       final id = row['id'] as String;
-      groupedValues[recordId]![fieldId] = _mapFieldValue(type, id, recordId, fieldId, row);
+      groupedValues[recordId]![fieldId] = _mapFieldValue(
+        type,
+        id,
+        recordId,
+        fieldId,
+        row,
+      );
     }
 
     final records = pageResults.map((row) {
@@ -359,15 +446,22 @@ class SqliteRecordRepository implements RecordRepository {
         id: id,
         databaseId: databaseId,
         values: groupedValues[id]!,
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          row['created_at'] as int,
+        ),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(
+          row['updated_at'] as int,
+        ),
       );
     }).toList();
 
     RecordCursor? nextCursor;
     if (hasMore) {
       final lastRecord = records.last;
-      nextCursor = RecordCursor(createdAt: lastRecord.createdAt, id: lastRecord.id);
+      nextCursor = RecordCursor(
+        createdAt: lastRecord.createdAt,
+        id: lastRecord.id,
+      );
     }
 
     return RecordPage(
@@ -377,51 +471,98 @@ class SqliteRecordRepository implements RecordRepository {
     );
   }
 
-  FieldValue _mapFieldValue(FieldType type, String id, String recordId, String fieldId, Map<String, Object?> row) {
+  FieldValue _mapFieldValue(
+    FieldType type,
+    String id,
+    String recordId,
+    String fieldId,
+    Map<String, Object?> row,
+  ) {
     switch (type) {
       case FieldType.text:
-        return TextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
+        return TextFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: row['text_value'] as String? ?? '',
+        );
       case FieldType.longText:
-        return LongTextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
+        return LongTextFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: row['text_value'] as String? ?? '',
+        );
       case FieldType.integer:
-        return IntegerFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['integer_value'] as int? ?? 0);
+        return IntegerFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: row['integer_value'] as int? ?? 0,
+        );
       case FieldType.decimal:
-        return DecimalFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['decimal_value'] as num?)?.toDouble() ?? 0.0);
+        return DecimalFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: (row['decimal_value'] as num?)?.toDouble() ?? 0.0,
+        );
       case FieldType.boolean:
-        return BooleanFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['boolean_value'] as int?) == 1);
+        return BooleanFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: (row['boolean_value'] as int?) == 1,
+        );
       case FieldType.date:
-        return DateFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_value'] as int? ?? 0));
+        return DateFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: DateTime.fromMillisecondsSinceEpoch(
+            row['date_value'] as int? ?? 0,
+          ),
+        );
       case FieldType.dateTime:
-        return DateTimeFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_time_value'] as int? ?? 0));
+        return DateTimeFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: DateTime.fromMillisecondsSinceEpoch(
+            row['date_time_value'] as int? ?? 0,
+          ),
+        );
       case FieldType.choice:
-        return ChoiceFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['choice_value'] as String? ?? '');
+        return ChoiceFieldValue(
+          id: id,
+          recordId: recordId,
+          fieldId: fieldId,
+          value: row['choice_value'] as String? ?? '',
+        );
     }
   }
 
-  Future<Map<String, FieldValue>> _getValuesForRecord(String recordId, String databaseId) async {
-    // Need field types to instantiate correct FieldValue
-    final fields = await db.query(
-      'fields',
-      where: 'database_id = ?',
-      whereArgs: [databaseId],
-    );
-
-    final Map<String, FieldType> dbFields = {
-      for (var row in fields) row['id'] as String: FieldType.values.firstWhere((e) => e.name == row['type'])
-    };
-
-    final results = await db.query(
-      'field_values',
-      where: 'record_id = ?',
-      whereArgs: [recordId],
+  Future<Map<String, FieldValue>> _getValuesForRecord(
+    String recordId,
+    String databaseId,
+  ) async {
+    // Single JOIN query to fetch field values alongside field type definition
+    final results = await db.rawQuery(
+      '''
+      SELECT fv.*, f.type AS field_type
+      FROM field_values fv
+      INNER JOIN fields f ON fv.field_id = f.id
+      WHERE fv.record_id = ?
+      ''',
+      [recordId],
     );
 
     final Map<String, FieldValue> values = {};
 
     for (final row in results) {
       final fieldId = row['field_id'] as String;
-      final type = dbFields[fieldId];
-      if (type == null) continue; // Orphaned value, shouldn't happen with CASCADE
+      final typeStr = row['field_type'] as String?;
+      final type = _parseFieldType(typeStr, fieldId: fieldId);
 
       final id = row['id'] as String;
       values[fieldId] = _mapFieldValue(type, id, recordId, fieldId, row);

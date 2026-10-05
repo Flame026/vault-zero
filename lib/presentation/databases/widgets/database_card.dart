@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 
+import '../../../core/theme/design_tokens.dart';
 import '../../../domain/models/database_definition.dart';
+import '../../common/widgets/vault_badge.dart';
+import '../../common/widgets/vault_card.dart';
+import '../../common/widgets/vault_icon_badge.dart';
 
 class DatabaseCard extends StatelessWidget {
   final DatabaseDefinition database;
@@ -22,119 +27,135 @@ class DatabaseCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
+    final fieldCount = database.fields.length;
+    final fieldLabel = fieldCount == 0
+        ? 'No fields'
+        : '$fieldCount ${fieldCount == 1 ? 'field' : 'fields'}';
 
-    return Card(
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
+    return VaultCard(
+      onTap: onTap,
+      semanticsLabel: 'Open database ${database.name}',
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
       ),
-      child: InkWell(
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(16.0),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: colorScheme.primaryContainer,
-                  borderRadius: BorderRadius.circular(14),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Unified squircle icon badge
+          const VaultIconBadge(icon: Icons.storage_rounded),
+          const SizedBox(width: AppSpacing.md),
+          // Database details
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  database.name,
+                  style: theme.textTheme.titleMedium?.copyWith(
+                    fontWeight: FontWeight.w600,
+                    color: colorScheme.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-                child: Icon(
-                  Icons.storage_rounded,
-                  color: colorScheme.onPrimaryContainer,
-                  size: 24,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      database.name,
-                      style: theme.textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
+                if (database.description.isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.xxs),
+                  Text(
+                    database.description,
+                    style: theme.textTheme.bodySmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                      height: 1.3,
                     ),
-                    if (database.description.isNotEmpty) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        database.description,
-                        style: theme.textTheme.bodyMedium?.copyWith(
-                          color: colorScheme.onSurfaceVariant,
-                        ),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ],
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.xs),
+                // Structured metadata badges
+                Wrap(
+                  spacing: AppSpacing.xs,
+                  runSpacing: AppSpacing.xxs,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    VaultBadge(
+                      icon: Icons.schema_outlined,
+                      label: fieldLabel,
+                      variant: fieldCount == 0
+                          ? VaultBadgeVariant.warning
+                          : VaultBadgeVariant.neutral,
+                    ),
+                    VaultBadge(
+                      icon: Icons.schedule_rounded,
+                      label: DateFormat.yMMMd().format(database.updatedAt),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: AppSpacing.sm),
+          // Action menu button with 48x48 touch target
+          PopupMenuButton<String>(
+            tooltip: 'Database options for ${database.name}',
+            icon: Icon(
+              Icons.more_vert_rounded,
+              color: colorScheme.onSurfaceVariant,
+              size: AppIconSizes.standard,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.radiusCard,
+              side: AppBorders.subtle(colorScheme),
+            ),
+            onSelected: (value) {
+              if (value == 'manage_fields') {
+                onManageFields();
+              } else if (value == 'edit') {
+                onEdit();
+              } else if (value == 'delete') {
+                onDelete();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'manage_fields',
+                child: Row(
+                  children: [
+                    Icon(Icons.schema_rounded, size: AppIconSizes.standard),
+                    SizedBox(width: AppSpacing.md),
+                    Text('Manage Fields'),
                   ],
                 ),
               ),
-              const SizedBox(width: 8),
-              PopupMenuButton<String>(
-                icon: Icon(
-                  Icons.more_vert_rounded,
-                  color: colorScheme.onSurfaceVariant,
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_rounded, size: AppIconSizes.standard),
+                    SizedBox(width: AppSpacing.md),
+                    Text('Edit'),
+                  ],
                 ),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_rounded,
+                      size: AppIconSizes.standard,
+                      color: colorScheme.error,
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Text('Delete', style: TextStyle(color: colorScheme.error)),
+                  ],
                 ),
-                onSelected: (value) {
-                  if (value == 'manage_fields') {
-                    onManageFields();
-                  } else if (value == 'edit') {
-                    onEdit();
-                  } else if (value == 'delete') {
-                    onDelete();
-                  }
-                },
-                itemBuilder: (context) => [
-                  const PopupMenuItem(
-                    value: 'manage_fields',
-                    child: Row(
-                      children: [
-                        Icon(Icons.schema_rounded, size: 20),
-                        SizedBox(width: 12),
-                        Text('Manage Fields'),
-                      ],
-                    ),
-                  ),
-                  const PopupMenuItem(
-                    value: 'edit',
-                    child: Row(
-                      children: [
-                        Icon(Icons.edit_rounded, size: 20),
-                        SizedBox(width: 12),
-                        Text('Edit'),
-                      ],
-                    ),
-                  ),
-                  PopupMenuItem(
-                    value: 'delete',
-                    child: Row(
-                      children: [
-                        Icon(Icons.delete_rounded, size: 20, color: colorScheme.error),
-                        const SizedBox(width: 12),
-                        Text('Delete', style: TextStyle(color: colorScheme.error)),
-                      ],
-                    ),
-                  ),
-                ],
               ),
             ],
           ),
-        ),
+        ],
       ),
     );
   }

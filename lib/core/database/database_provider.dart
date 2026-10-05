@@ -2,6 +2,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 
+import 'database_storage_service.dart';
+
+final databaseStorageServiceProvider = Provider<DatabaseStorageService?>((ref) {
+  final dbAsync = ref.watch(databaseProvider);
+  return dbAsync.when(
+    data: (db) => DatabaseStorageService(db),
+    loading: () => null,
+    error: (_, _) => null,
+  );
+});
+
 final databaseProvider = FutureProvider<Database>((ref) async {
   final dbPath = await getDatabasesPath();
 
@@ -11,14 +22,31 @@ final databaseProvider = FutureProvider<Database>((ref) async {
     onConfigure: (db) async {
       await db.execute('PRAGMA foreign_keys = ON');
     },
+    onOpen: (db) async {
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_fields_database_id ON fields(database_id)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_field_values_field_id ON field_values(field_id)',
+      );
+    },
     onCreate: (db, version) async {
       if (version >= 2) {
         await _createV2Tables(db);
       }
 
       if (version >= 3) {
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)',
+        );
       }
+
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_fields_database_id ON fields(database_id)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_field_values_field_id ON field_values(field_id)',
+      );
     },
     onUpgrade: (db, oldVersion, newVersion) async {
       if (oldVersion < 2) {
@@ -26,12 +54,21 @@ final databaseProvider = FutureProvider<Database>((ref) async {
       }
 
       if (oldVersion < 3) {
-        await db.execute('CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)');
+        await db.execute(
+          'CREATE INDEX IF NOT EXISTS idx_records_database_created_id ON records(database_id, created_at, id)',
+        );
       }
 
       if (oldVersion < 4) {
         await db.execute('DROP TABLE IF EXISTS characters');
       }
+
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_fields_database_id ON fields(database_id)',
+      );
+      await db.execute(
+        'CREATE INDEX IF NOT EXISTS idx_field_values_field_id ON field_values(field_id)',
+      );
     },
   );
 });

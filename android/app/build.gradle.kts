@@ -14,11 +14,14 @@ if (keystorePropertiesFile.exists()) {
     keystoreProperties.load(FileInputStream(keystorePropertiesFile))
 }
 
+val storeFile = keystoreProperties["storeFile"]?.let { file(it) }
+
 val releaseSigningConfigured =
     keystorePropertiesFile.exists() &&
         keystoreProperties["keyAlias"] != null &&
         keystoreProperties["keyPassword"] != null &&
-        keystoreProperties["storeFile"] != null &&
+        storeFile != null &&
+        storeFile.exists() &&
         keystoreProperties["storePassword"] != null
 
 android {
@@ -45,8 +48,7 @@ android {
             create("release") {
                 keyAlias = keystoreProperties["keyAlias"] as String
                 keyPassword = keystoreProperties["keyPassword"] as String
-                storeFile =
-                    keystoreProperties["storeFile"]?.let { file(it) }
+                this.storeFile = storeFile
                 storePassword = keystoreProperties["storePassword"] as String
             }
         }
@@ -56,7 +58,16 @@ android {
         release {
             if (releaseSigningConfigured) {
                 signingConfig = signingConfigs.getByName("release")
+            } else {
+                signingConfig = signingConfigs.getByName("debug")
             }
+        }
+    }
+
+    packaging {
+        resources {
+            excludes += "/META-INF/{AL2.0,LGPL2.1}"
+            excludes += "/META-INF/DEPENDENCIES"
         }
     }
 }

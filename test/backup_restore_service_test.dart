@@ -86,8 +86,11 @@ void main() {
 
   test('Valid backup creation and exact UUID/Timestamp preservation', () async {
     final nowRaw = DateTime.now().toUtc();
-    final now = DateTime.fromMillisecondsSinceEpoch(nowRaw.millisecondsSinceEpoch, isUtc: true);
-    
+    final now = DateTime.fromMillisecondsSinceEpoch(
+      nowRaw.millisecondsSinceEpoch,
+      isUtc: true,
+    );
+
     // Insert some test data directly
     await db.insert('databases', {
       'id': 'db-1',
@@ -96,7 +99,7 @@ void main() {
       'created_at': now.millisecondsSinceEpoch,
       'updated_at': now.millisecondsSinceEpoch,
     });
-    
+
     await db.insert('fields', {
       'id': 'field-1',
       'database_id': 'db-1',
@@ -136,11 +139,13 @@ void main() {
 
     // Test restoring it to a clean DB
     await db.execute('DELETE FROM databases');
-    
+
     await service.restoreVault(jsonContent);
 
     // Verify
-    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM records'));
+    final count = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM records'),
+    );
     expect(count, 1);
     final valRow = await db.query('field_values');
     expect(valRow.first['text_value'], 'John Doe');
@@ -149,7 +154,9 @@ void main() {
   test('Empty vault backup and restore', () async {
     final jsonContent = await service.exportVault();
     await service.restoreVault(jsonContent);
-    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM databases'));
+    final count = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM databases'),
+    );
     expect(count, 0);
   });
 
@@ -158,12 +165,14 @@ void main() {
   });
 
   test('Unsupported backup version rejection', () async {
-    final badJson = '{"backupFormatVersion": 99, "databases": [], "fields": [], "records": []}';
+    final badJson =
+        '{"backupFormatVersion": 99, "databases": [], "fields": [], "records": []}';
     expect(() => service.restoreVault(badJson), throwsFormatException);
   });
 
   test('Missing structures rejection', () async {
-    final badJson = '{"backupFormatVersion": 1, "databases": []}'; // missing fields and records
+    final badJson =
+        '{"backupFormatVersion": 1, "databases": []}'; // missing fields and records
     expect(() => service.restoreVault(badJson), throwsFormatException);
   });
 
@@ -216,7 +225,213 @@ void main() {
     expect(() => service.restoreVault(badDateJson), throwsFormatException);
 
     // Assert existing data remains intact
-    final count = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM databases'));
+    final count = Sqflite.firstIntValue(
+      await db.rawQuery('SELECT COUNT(*) FROM databases'),
+    );
     expect(count, 1);
+  });
+
+  test('Missing or invalid exportDate rejected', () async {
+    final missingDate =
+        '{"backupFormatVersion": 1, "databases": [], "fields": [], "records": []}';
+    expect(() => service.restoreVault(missingDate), throwsFormatException);
+
+    final invalidDate =
+        '{"backupFormatVersion": 1, "exportDate": "not-a-date", "databases": [], "fields": [], "records": []}';
+    expect(() => service.restoreVault(invalidDate), throwsFormatException);
+  });
+
+  test('Duplicate database ID rejected', () async {
+    final dupDb = jsonEncode({
+      'backupFormatVersion': 1,
+      'exportDate': '2026-08-12T00:00:00.000Z',
+      'databases': [
+        {
+          'id': 'db-1',
+          'name': 'DB 1',
+          'description': '',
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+        {
+          'id': 'db-1',
+          'name': 'DB 2',
+          'description': '',
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'fields': [],
+      'records': [],
+    });
+    expect(() => service.restoreVault(dupDb), throwsFormatException);
+  });
+
+  test('Duplicate field ID rejected', () async {
+    final dupField = jsonEncode({
+      'backupFormatVersion': 1,
+      'exportDate': '2026-08-12T00:00:00.000Z',
+      'databases': [
+        {
+          'id': 'db-1',
+          'name': 'DB 1',
+          'description': '',
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'fields': [
+        {
+          'id': 'f-1',
+          'databaseId': 'db-1',
+          'name': 'Field 1',
+          'type': 'text',
+          'position': 0,
+          'isRequired': false,
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+        {
+          'id': 'f-1',
+          'databaseId': 'db-1',
+          'name': 'Field 2',
+          'type': 'text',
+          'position': 1,
+          'isRequired': false,
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'records': [],
+    });
+    expect(() => service.restoreVault(dupField), throwsFormatException);
+  });
+
+  test('Unrecognized field type rejected', () async {
+    final unknownFieldType = jsonEncode({
+      'backupFormatVersion': 1,
+      'exportDate': '2026-08-12T00:00:00.000Z',
+      'databases': [
+        {
+          'id': 'db-1',
+          'name': 'DB 1',
+          'description': '',
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'fields': [
+        {
+          'id': 'f-1',
+          'databaseId': 'db-1',
+          'name': 'Field 1',
+          'type': 'unsupported_type',
+          'position': 0,
+          'isRequired': false,
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'records': [],
+    });
+    expect(() => service.restoreVault(unknownFieldType), throwsFormatException);
+  });
+
+  test('Mismatched record-value field type rejected', () async {
+    final mismatchedValueType = jsonEncode({
+      'backupFormatVersion': 1,
+      'exportDate': '2026-08-12T00:00:00.000Z',
+      'databases': [
+        {
+          'id': 'db-1',
+          'name': 'DB 1',
+          'description': '',
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'fields': [
+        {
+          'id': 'f-1',
+          'databaseId': 'db-1',
+          'name': 'Field 1',
+          'type': 'integer',
+          'position': 0,
+          'isRequired': false,
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'records': [
+        {
+          'id': 'r-1',
+          'databaseId': 'db-1',
+          'values': {
+            'f-1': {
+              'id': 'val-1',
+              'recordId': 'r-1',
+              'fieldId': 'f-1',
+              'type': 'text',
+              'value': 'not an integer',
+            },
+          },
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(
+      () => service.restoreVault(mismatchedValueType),
+      throwsFormatException,
+    );
+  });
+
+  test('Mismatched recordId inside value rejected', () async {
+    final mismatchedRecordId = jsonEncode({
+      'backupFormatVersion': 1,
+      'exportDate': '2026-08-12T00:00:00.000Z',
+      'databases': [
+        {
+          'id': 'db-1',
+          'name': 'DB 1',
+          'description': '',
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'fields': [
+        {
+          'id': 'f-1',
+          'databaseId': 'db-1',
+          'name': 'Field 1',
+          'type': 'text',
+          'position': 0,
+          'isRequired': false,
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+      'records': [
+        {
+          'id': 'r-1',
+          'databaseId': 'db-1',
+          'values': {
+            'f-1': {
+              'id': 'val-1',
+              'recordId': 'wrong-rec-id',
+              'fieldId': 'f-1',
+              'type': 'text',
+              'value': 'hello',
+            },
+          },
+          'createdAt': '2026-08-12T00:00:00.000Z',
+          'updatedAt': '2026-08-12T00:00:00.000Z',
+        },
+      ],
+    });
+    expect(
+      () => service.restoreVault(mismatchedRecordId),
+      throwsFormatException,
+    );
   });
 }

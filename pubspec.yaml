@@ -1,7 +1,7 @@
 name: vault_zero
 description: "Vault Zero — a premium offline customizable database application."
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.12.2
@@ -9,7 +9,6 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  cupertino_icons: ^1.0.8
   sqflite: ^2.4.2
   path: ^1.9.1
   excel: ^4.0.6
@@ -31,7 +30,7 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/branding/
+    - assets/branding/vault_zero_splash.png
 
 flutter_launcher_icons:
   android: true

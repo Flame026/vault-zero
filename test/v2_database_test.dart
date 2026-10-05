@@ -145,6 +145,153 @@ void main() {
       expect(retrieved, isNull);
     });
 
+    test(
+      'Delete Database purges fields, records, and field_values explicitly',
+      () async {
+        final dbId = uuid.v4();
+        final fieldId = uuid.v4();
+        final recordId = uuid.v4();
+
+        await schemaRepo.createDatabase(
+          DatabaseDefinition(
+            id: dbId,
+            name: 'Cascade DB',
+            fields: [],
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+
+        await schemaRepo.createField(
+          FieldDefinition(
+            id: fieldId,
+            databaseId: dbId,
+            name: 'Field 1',
+            type: FieldType.text,
+            position: 0,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+
+        await recordRepo.saveRecord(
+          Record(
+            id: recordId,
+            databaseId: dbId,
+            values: {
+              fieldId: TextFieldValue(
+                id: uuid.v4(),
+                recordId: recordId,
+                fieldId: fieldId,
+                value: 'Val 1',
+              ),
+            },
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+
+        // Disable foreign keys to test that explicit manual cascade works
+        await db.execute('PRAGMA foreign_keys = OFF');
+        await schemaRepo.deleteDatabase(dbId);
+        await db.execute('PRAGMA foreign_keys = ON');
+
+        final dbCount = Sqflite.firstIntValue(
+          await db.rawQuery('SELECT COUNT(*) FROM databases WHERE id = ?', [
+            dbId,
+          ]),
+        );
+        final fCount = Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM fields WHERE database_id = ?',
+            [dbId],
+          ),
+        );
+        final rCount = Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM records WHERE database_id = ?',
+            [dbId],
+          ),
+        );
+        final fvCount = Sqflite.firstIntValue(
+          await db.rawQuery(
+            'SELECT COUNT(*) FROM field_values WHERE record_id = ?',
+            [recordId],
+          ),
+        );
+
+        expect(dbCount, 0);
+        expect(fCount, 0);
+        expect(rCount, 0);
+        expect(fvCount, 0);
+      },
+    );
+
+    test('Delete Field purges field_values explicitly', () async {
+      final dbId = uuid.v4();
+      final fieldId = uuid.v4();
+      final recordId = uuid.v4();
+
+      await schemaRepo.createDatabase(
+        DatabaseDefinition(
+          id: dbId,
+          name: 'Field Cascade DB',
+          fields: [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      await schemaRepo.createField(
+        FieldDefinition(
+          id: fieldId,
+          databaseId: dbId,
+          name: 'Field 1',
+          type: FieldType.text,
+          position: 0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      await recordRepo.saveRecord(
+        Record(
+          id: recordId,
+          databaseId: dbId,
+          values: {
+            fieldId: TextFieldValue(
+              id: uuid.v4(),
+              recordId: recordId,
+              fieldId: fieldId,
+              value: 'Val 1',
+            ),
+          },
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
+
+      // Disable foreign keys to test explicit field_values purge
+      await db.execute('PRAGMA foreign_keys = OFF');
+      await schemaRepo.deleteField(fieldId);
+      await db.execute('PRAGMA foreign_keys = ON');
+
+      final fCount = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM fields WHERE id = ?', [
+          fieldId,
+        ]),
+      );
+      final fvCount = Sqflite.firstIntValue(
+        await db.rawQuery(
+          'SELECT COUNT(*) FROM field_values WHERE field_id = ?',
+          [fieldId],
+        ),
+      );
+
+      expect(fCount, 0);
+      expect(fvCount, 0);
+    });
+
     test('Create, Read, Update, Delete Field', () async {
       final dbId = uuid.v4();
       final dbDef = DatabaseDefinition(
@@ -182,67 +329,80 @@ void main() {
       expect(fields, isEmpty);
     });
 
-    test('getAllDatabases returns all databases with their respective ordered fields', () async {
-      final db1Id = uuid.v4();
-      final db2Id = uuid.v4();
+    test(
+      'getAllDatabases returns all databases with their respective ordered fields',
+      () async {
+        final db1Id = uuid.v4();
+        final db2Id = uuid.v4();
 
-      await schemaRepo.createDatabase(DatabaseDefinition(
-        id: db1Id,
-        name: 'Database 1',
-        fields: [],
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
-      await schemaRepo.createDatabase(DatabaseDefinition(
-        id: db2Id,
-        name: 'Database 2',
-        fields: [],
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+        await schemaRepo.createDatabase(
+          DatabaseDefinition(
+            id: db1Id,
+            name: 'Database 1',
+            fields: [],
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        await schemaRepo.createDatabase(
+          DatabaseDefinition(
+            id: db2Id,
+            name: 'Database 2',
+            fields: [],
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
 
-      await schemaRepo.createField(FieldDefinition(
-        id: uuid.v4(),
-        databaseId: db1Id,
-        name: 'DB1 Field 2',
-        type: FieldType.text,
-        position: 1,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
-      await schemaRepo.createField(FieldDefinition(
-        id: uuid.v4(),
-        databaseId: db1Id,
-        name: 'DB1 Field 1',
-        type: FieldType.text,
-        position: 0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
-      await schemaRepo.createField(FieldDefinition(
-        id: uuid.v4(),
-        databaseId: db2Id,
-        name: 'DB2 Field 1',
-        type: FieldType.boolean,
-        position: 0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+        await schemaRepo.createField(
+          FieldDefinition(
+            id: uuid.v4(),
+            databaseId: db1Id,
+            name: 'DB1 Field 2',
+            type: FieldType.text,
+            position: 1,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        await schemaRepo.createField(
+          FieldDefinition(
+            id: uuid.v4(),
+            databaseId: db1Id,
+            name: 'DB1 Field 1',
+            type: FieldType.text,
+            position: 0,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
+        await schemaRepo.createField(
+          FieldDefinition(
+            id: uuid.v4(),
+            databaseId: db2Id,
+            name: 'DB2 Field 1',
+            type: FieldType.boolean,
+            position: 0,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
 
-      final all = await schemaRepo.getAllDatabases();
-      expect(all.length, 2);
+        final all = await schemaRepo.getAllDatabases();
+        expect(all.length, 2);
 
-      final db1 = all.firstWhere((d) => d.id == db1Id);
-      final db2 = all.firstWhere((d) => d.id == db2Id);
+        final db1 = all.firstWhere((d) => d.id == db1Id);
+        final db2 = all.firstWhere((d) => d.id == db2Id);
 
-      expect(db1.fields.length, 2);
-      expect(db1.fields[0].name, 'DB1 Field 1');
-      expect(db1.fields[1].name, 'DB1 Field 2');
+        expect(db1.fields.length, 2);
+        expect(db1.fields[0].name, 'DB1 Field 1');
+        expect(db1.fields[1].name, 'DB1 Field 2');
 
-      expect(db2.fields.length, 1);
-      expect(db2.fields[0].name, 'DB2 Field 1');
-      expect(db2.fields[0].type, FieldType.boolean);
-    });
+        expect(db2.fields.length, 1);
+        expect(db2.fields[0].name, 'DB2 Field 1');
+        expect(db2.fields[0].type, FieldType.boolean);
+      },
+    );
   });
 
   group('RecordRepository CRUD', () {
@@ -330,7 +490,10 @@ void main() {
       await recordRepo.saveRecord(updatedRecord);
 
       final retrieved = await recordRepo.getRecord(recordId);
-      expect((retrieved!.values[fieldId] as TextFieldValue).value, 'Dune Messiah');
+      expect(
+        (retrieved!.values[fieldId] as TextFieldValue).value,
+        'Dune Messiah',
+      );
     });
 
     test('Delete Record', () async {
@@ -338,50 +501,156 @@ void main() {
       final record = Record(
         id: recordId,
         databaseId: dbId,
-        values: {},
+        values: {
+          fieldId: TextFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldId,
+            value: 'Dune',
+          ),
+        },
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
       await recordRepo.saveRecord(record);
+
+      // Temporarily disable foreign keys to ensure explicit cleanup works unconditionally
+      await db.execute('PRAGMA foreign_keys = OFF');
       await recordRepo.deleteRecord(recordId);
+      await db.execute('PRAGMA foreign_keys = ON');
 
       final retrieved = await recordRepo.getRecord(recordId);
       expect(retrieved, isNull);
+
+      final valCount = Sqflite.firstIntValue(
+        await db.rawQuery(
+          'SELECT COUNT(*) FROM field_values WHERE record_id = ?',
+          [recordId],
+        ),
+      );
+      expect(valCount, 0);
     });
 
-    test('getRecordsForDatabase retrieves all records with values efficiently', () async {
-      final r1Id = uuid.v4();
-      final r2Id = uuid.v4();
-      final t1 = DateTime(2025, 1, 1, 10, 0);
-      final t2 = DateTime(2025, 1, 1, 11, 0);
+    test('Update Record clears removed field values', () async {
+      final field2Id = uuid.v4();
+      await schemaRepo.createField(
+        FieldDefinition(
+          id: field2Id,
+          databaseId: dbId,
+          name: 'Author',
+          type: FieldType.text,
+          position: 1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
-      await recordRepo.saveRecord(Record(
-        id: r1Id,
+      final recordId = uuid.v4();
+      final record = Record(
+        id: recordId,
         databaseId: dbId,
         values: {
-          fieldId: TextFieldValue(id: uuid.v4(), recordId: r1Id, fieldId: fieldId, value: 'Book 1'),
+          fieldId: TextFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldId,
+            value: 'Dune',
+          ),
+          field2Id: TextFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: field2Id,
+            value: 'Frank Herbert',
+          ),
         },
-        createdAt: t1,
-        updatedAt: t1,
-      ));
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      await recordRepo.saveRecord(record);
 
-      await recordRepo.saveRecord(Record(
-        id: r2Id,
-        databaseId: dbId,
+      // Now update the record with only fieldId, omitting field2Id
+      final updatedRecord = record.copyWith(
         values: {
-          fieldId: TextFieldValue(id: uuid.v4(), recordId: r2Id, fieldId: fieldId, value: 'Book 2'),
+          fieldId: TextFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldId,
+            value: 'Dune Part 1',
+          ),
         },
-        createdAt: t2,
-        updatedAt: t2,
-      ));
+        updatedAt: DateTime.now(),
+      );
+      await recordRepo.saveRecord(updatedRecord);
 
-      final allRecords = await recordRepo.getRecordsForDatabase(dbId);
-      expect(allRecords.length, 2);
-      expect(allRecords[0].id, r1Id);
-      expect((allRecords[0].values[fieldId] as TextFieldValue).value, 'Book 1');
-      expect(allRecords[1].id, r2Id);
-      expect((allRecords[1].values[fieldId] as TextFieldValue).value, 'Book 2');
+      final retrieved = await recordRepo.getRecord(recordId);
+      expect(retrieved!.values.length, 1);
+      expect(retrieved.values.containsKey(field2Id), isFalse);
+
+      final fvCount = Sqflite.firstIntValue(
+        await db.rawQuery(
+          'SELECT COUNT(*) FROM field_values WHERE record_id = ? AND field_id = ?',
+          [recordId, field2Id],
+        ),
+      );
+      expect(fvCount, 0);
     });
+
+    test(
+      'getRecordsForDatabase retrieves all records with values efficiently',
+      () async {
+        final r1Id = uuid.v4();
+        final r2Id = uuid.v4();
+        final t1 = DateTime(2025, 1, 1, 10, 0);
+        final t2 = DateTime(2025, 1, 1, 11, 0);
+
+        await recordRepo.saveRecord(
+          Record(
+            id: r1Id,
+            databaseId: dbId,
+            values: {
+              fieldId: TextFieldValue(
+                id: uuid.v4(),
+                recordId: r1Id,
+                fieldId: fieldId,
+                value: 'Book 1',
+              ),
+            },
+            createdAt: t1,
+            updatedAt: t1,
+          ),
+        );
+
+        await recordRepo.saveRecord(
+          Record(
+            id: r2Id,
+            databaseId: dbId,
+            values: {
+              fieldId: TextFieldValue(
+                id: uuid.v4(),
+                recordId: r2Id,
+                fieldId: fieldId,
+                value: 'Book 2',
+              ),
+            },
+            createdAt: t2,
+            updatedAt: t2,
+          ),
+        );
+
+        final allRecords = await recordRepo.getRecordsForDatabase(dbId);
+        expect(allRecords.length, 2);
+        expect(allRecords[0].id, r1Id);
+        expect(
+          (allRecords[0].values[fieldId] as TextFieldValue).value,
+          'Book 1',
+        );
+        expect(allRecords[1].id, r2Id);
+        expect(
+          (allRecords[1].values[fieldId] as TextFieldValue).value,
+          'Book 2',
+        );
+      },
+    );
   });
 
   group('Typed Values and Validation', () {
@@ -390,27 +659,33 @@ void main() {
 
     setUp(() async {
       dbId = uuid.v4();
-      await schemaRepo.createDatabase(DatabaseDefinition(
-        id: dbId,
-        name: 'Test DB',
-        fields: [],
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+      await schemaRepo.createDatabase(
+        DatabaseDefinition(
+          id: dbId,
+          name: 'Test DB',
+          fields: [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
       for (var type in FieldType.values) {
         final fId = uuid.v4();
         fieldIds[type] = fId;
-        await schemaRepo.createField(FieldDefinition(
-          id: fId,
-          databaseId: dbId,
-          name: type.name,
-          type: type,
-          position: 0,
-          configuration: type == FieldType.choice ? const ChoiceConfig(options: ['Option A', 'Option B']) : null,
-          createdAt: DateTime.now(),
-          updatedAt: DateTime.now(),
-        ));
+        await schemaRepo.createField(
+          FieldDefinition(
+            id: fId,
+            databaseId: dbId,
+            name: type.name,
+            type: type,
+            position: 0,
+            configuration: type == FieldType.choice
+                ? const ChoiceConfig(options: ['Option A', 'Option B'])
+                : null,
+            createdAt: DateTime.now(),
+            updatedAt: DateTime.now(),
+          ),
+        );
       }
     });
 
@@ -420,14 +695,54 @@ void main() {
         id: recordId,
         databaseId: dbId,
         values: {
-          fieldIds[FieldType.text]!: TextFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.text]!, value: 'Hello'),
-          fieldIds[FieldType.longText]!: LongTextFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.longText]!, value: 'World'),
-          fieldIds[FieldType.integer]!: IntegerFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.integer]!, value: 42),
-          fieldIds[FieldType.decimal]!: DecimalFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.decimal]!, value: 3.14),
-          fieldIds[FieldType.boolean]!: BooleanFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.boolean]!, value: true),
-          fieldIds[FieldType.date]!: DateFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.date]!, value: DateTime(2025, 1, 1)),
-          fieldIds[FieldType.dateTime]!: DateTimeFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.dateTime]!, value: DateTime(2025, 1, 1, 12, 30)),
-          fieldIds[FieldType.choice]!: ChoiceFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldIds[FieldType.choice]!, value: 'Option A'),
+          fieldIds[FieldType.text]!: TextFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.text]!,
+            value: 'Hello',
+          ),
+          fieldIds[FieldType.longText]!: LongTextFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.longText]!,
+            value: 'World',
+          ),
+          fieldIds[FieldType.integer]!: IntegerFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.integer]!,
+            value: 42,
+          ),
+          fieldIds[FieldType.decimal]!: DecimalFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.decimal]!,
+            value: 3.14,
+          ),
+          fieldIds[FieldType.boolean]!: BooleanFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.boolean]!,
+            value: true,
+          ),
+          fieldIds[FieldType.date]!: DateFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.date]!,
+            value: DateTime(2025, 1, 1),
+          ),
+          fieldIds[FieldType.dateTime]!: DateTimeFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.dateTime]!,
+            value: DateTime(2025, 1, 1, 12, 30),
+          ),
+          fieldIds[FieldType.choice]!: ChoiceFieldValue(
+            id: uuid.v4(),
+            recordId: recordId,
+            fieldId: fieldIds[FieldType.choice]!,
+            value: 'Option A',
+          ),
         },
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -437,14 +752,44 @@ void main() {
       final retrieved = await recordRepo.getRecord(recordId);
 
       expect(retrieved, isNotNull);
-      expect((retrieved!.values[fieldIds[FieldType.text]] as TextFieldValue).value, 'Hello');
-      expect((retrieved.values[fieldIds[FieldType.longText]] as LongTextFieldValue).value, 'World');
-      expect((retrieved.values[fieldIds[FieldType.integer]] as IntegerFieldValue).value, 42);
-      expect((retrieved.values[fieldIds[FieldType.decimal]] as DecimalFieldValue).value, 3.14);
-      expect((retrieved.values[fieldIds[FieldType.boolean]] as BooleanFieldValue).value, true);
-      expect((retrieved.values[fieldIds[FieldType.date]] as DateFieldValue).value, DateTime(2025, 1, 1));
-      expect((retrieved.values[fieldIds[FieldType.dateTime]] as DateTimeFieldValue).value, DateTime(2025, 1, 1, 12, 30));
-      expect((retrieved.values[fieldIds[FieldType.choice]] as ChoiceFieldValue).value, 'Option A');
+      expect(
+        (retrieved!.values[fieldIds[FieldType.text]] as TextFieldValue).value,
+        'Hello',
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.longText]] as LongTextFieldValue)
+            .value,
+        'World',
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.integer]] as IntegerFieldValue)
+            .value,
+        42,
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.decimal]] as DecimalFieldValue)
+            .value,
+        3.14,
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.boolean]] as BooleanFieldValue)
+            .value,
+        true,
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.date]] as DateFieldValue).value,
+        DateTime(2025, 1, 1),
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.dateTime]] as DateTimeFieldValue)
+            .value,
+        DateTime(2025, 1, 1, 12, 30),
+      );
+      expect(
+        (retrieved.values[fieldIds[FieldType.choice]] as ChoiceFieldValue)
+            .value,
+        'Option A',
+      );
     });
 
     test('Type mismatch throws ArgumentError', () async {
@@ -491,43 +836,68 @@ void main() {
   group('Foreign Key Constraints', () {
     test('Cascade delete database deletes fields and records', () async {
       final dbId = uuid.v4();
-      await schemaRepo.createDatabase(DatabaseDefinition(
-        id: dbId,
-        name: 'Cascade DB',
-        fields: [],
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+      await schemaRepo.createDatabase(
+        DatabaseDefinition(
+          id: dbId,
+          name: 'Cascade DB',
+          fields: [],
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
       final fieldId = uuid.v4();
-      await schemaRepo.createField(FieldDefinition(
-        id: fieldId,
-        databaseId: dbId,
-        name: 'Field',
-        type: FieldType.text,
-        position: 0,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+      await schemaRepo.createField(
+        FieldDefinition(
+          id: fieldId,
+          databaseId: dbId,
+          name: 'Field',
+          type: FieldType.text,
+          position: 0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
       final recordId = uuid.v4();
-      await recordRepo.saveRecord(Record(
-        id: recordId,
-        databaseId: dbId,
-        values: {
-          fieldId: TextFieldValue(id: uuid.v4(), recordId: recordId, fieldId: fieldId, value: 'Data'),
-        },
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+      await recordRepo.saveRecord(
+        Record(
+          id: recordId,
+          databaseId: dbId,
+          values: {
+            fieldId: TextFieldValue(
+              id: uuid.v4(),
+              recordId: recordId,
+              fieldId: fieldId,
+              value: 'Data',
+            ),
+          },
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
       // Delete the database
       await schemaRepo.deleteDatabase(dbId);
 
       // Verify cascading worked using raw queries to prove database state
-      final fieldsCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM fields WHERE database_id = ?', [dbId]));
-      final recordsCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM records WHERE database_id = ?', [dbId]));
-      final valuesCount = Sqflite.firstIntValue(await db.rawQuery('SELECT COUNT(*) FROM field_values WHERE record_id = ?', [recordId]));
+      final fieldsCount = Sqflite.firstIntValue(
+        await db.rawQuery('SELECT COUNT(*) FROM fields WHERE database_id = ?', [
+          dbId,
+        ]),
+      );
+      final recordsCount = Sqflite.firstIntValue(
+        await db.rawQuery(
+          'SELECT COUNT(*) FROM records WHERE database_id = ?',
+          [dbId],
+        ),
+      );
+      final valuesCount = Sqflite.firstIntValue(
+        await db.rawQuery(
+          'SELECT COUNT(*) FROM field_values WHERE record_id = ?',
+          [recordId],
+        ),
+      );
 
       expect(fieldsCount, 0);
       expect(recordsCount, 0);
@@ -537,7 +907,8 @@ void main() {
 
   group('Migration', () {
     test('V3 to V4 drops characters table but preserves generic data', () async {
-      final tempDbPath = 'migration_test.db'; // SQLite FFI handles this in the test dir
+      final tempDbPath =
+          'migration_test.db'; // SQLite FFI handles this in the test dir
 
       // Ensure clean state
       if (await databaseFactory.databaseExists(tempDbPath)) {
@@ -586,14 +957,14 @@ void main() {
         'skill1': 'D',
         'skill2': 'E',
         'skill3': 'F',
-        'skill4': 'G'
+        'skill4': 'G',
       });
       await migrationDb.insert('databases', {
         'id': 'db1',
         'name': 'Generic DB',
         'description': 'Desc',
         'created_at': 0,
-        'updated_at': 0
+        'updated_at': 0,
       });
       await migrationDb.close();
 
@@ -611,12 +982,24 @@ void main() {
       );
 
       // Step 4: Verify the characters table no longer exists
-      final legacyTableCheck = await migrationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='characters'");
-      expect(legacyTableCheck.isEmpty, isTrue, reason: 'characters table should have been dropped during migration');
+      final legacyTableCheck = await migrationDb.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='characters'",
+      );
+      expect(
+        legacyTableCheck.isEmpty,
+        isTrue,
+        reason: 'characters table should have been dropped during migration',
+      );
 
       // Step 5: Verify generic tables still exist and data is intact
-      final genericTableCheck = await migrationDb.rawQuery("SELECT name FROM sqlite_master WHERE type='table' AND name='databases'");
-      expect(genericTableCheck.isNotEmpty, isTrue, reason: 'databases table should still exist');
+      final genericTableCheck = await migrationDb.rawQuery(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name='databases'",
+      );
+      expect(
+        genericTableCheck.isNotEmpty,
+        isTrue,
+        reason: 'databases table should still exist',
+      );
 
       final dbData = await migrationDb.query('databases');
       expect(dbData.length, 1);

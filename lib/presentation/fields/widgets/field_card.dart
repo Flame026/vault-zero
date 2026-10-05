@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 
+import '../../../core/theme/design_tokens.dart';
 import '../../../domain/models/field_definition.dart';
+import '../../common/widgets/vault_badge.dart';
+import '../../common/widgets/vault_card.dart';
+import '../../common/widgets/vault_icon_badge.dart';
 
 class FieldCard extends StatelessWidget {
   final FieldDefinition field;
@@ -23,7 +27,7 @@ class FieldCard extends StatelessWidget {
       case FieldType.integer:
         return Icons.numbers_rounded;
       case FieldType.decimal:
-        return Icons.attach_money_rounded;
+        return Icons.tag_rounded;
       case FieldType.boolean:
         return Icons.check_box_outlined;
       case FieldType.date:
@@ -56,133 +60,158 @@ class FieldCard extends StatelessWidget {
     }
   }
 
+  Color _getTypeBackgroundColor(ColorScheme colorScheme, FieldType type) {
+    switch (type) {
+      case FieldType.text:
+      case FieldType.longText:
+        return colorScheme.primaryContainer.withValues(alpha: 0.7);
+      case FieldType.integer:
+      case FieldType.decimal:
+        return colorScheme.tertiaryContainer.withValues(alpha: 0.7);
+      case FieldType.boolean:
+        return colorScheme.secondaryContainer.withValues(alpha: 0.7);
+      case FieldType.date:
+      case FieldType.dateTime:
+        return colorScheme.surfaceContainerHighest;
+      case FieldType.choice:
+        return colorScheme.primaryContainer.withValues(alpha: 0.5);
+    }
+  }
+
+  Color _getTypeForegroundColor(ColorScheme colorScheme, FieldType type) {
+    switch (type) {
+      case FieldType.text:
+      case FieldType.longText:
+        return colorScheme.onPrimaryContainer;
+      case FieldType.integer:
+      case FieldType.decimal:
+        return colorScheme.onTertiaryContainer;
+      case FieldType.boolean:
+        return colorScheme.onSecondaryContainer;
+      case FieldType.date:
+      case FieldType.dateTime:
+        return colorScheme.primary;
+      case FieldType.choice:
+        return colorScheme.primary;
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Card(
+    return VaultCard(
       key: ValueKey(field.id),
-      clipBehavior: Clip.antiAlias,
-      elevation: 0,
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
+      onTap: onEdit,
+      padding: const EdgeInsets.symmetric(
+        horizontal: AppSpacing.lg,
+        vertical: AppSpacing.md,
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 10),
-        child: Row(
-          children: [
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: Row(
+        children: [
+          // Reorder drag affordance
+          Semantics(
+            label: 'Reorder ${field.name}',
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
               child: Icon(
                 Icons.drag_indicator_rounded,
-                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.5),
+                color: colorScheme.onSurfaceVariant.withValues(alpha: 0.6),
                 size: 22,
               ),
             ),
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: colorScheme.primaryContainer,
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(
-                _getIconForType(field.type),
-                color: colorScheme.onPrimaryContainer,
-                size: 20,
-              ),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Flexible(
-                        child: Text(
-                          field.name,
-                          style: theme.textTheme.titleMedium?.copyWith(
-                            fontWeight: FontWeight.bold,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(width: AppSpacing.xs),
+          // Field type icon container
+          VaultIconBadge(
+            icon: _getIconForType(field.type),
+            backgroundColor: _getTypeBackgroundColor(colorScheme, field.type),
+            iconColor: _getTypeForegroundColor(colorScheme, field.type),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          // Field name and attributes
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        field.name,
+                        style: theme.textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: colorScheme.onSurface,
                         ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
                       ),
-                      if (field.isRequired) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: colorScheme.errorContainer.withValues(alpha: 0.7),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            'Required',
-                            style: theme.textTheme.labelSmall?.copyWith(
-                              color: colorScheme.onErrorContainer,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    _getTypeLabel(field.type),
-                    style: theme.textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.onSurfaceVariant,
                     ),
-                  ),
-                ],
-              ),
-            ),
-            PopupMenuButton<String>(
-              icon: Icon(
-                Icons.more_vert_rounded,
-                color: colorScheme.onSurfaceVariant,
-              ),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(16),
-              ),
-              onSelected: (value) {
-                if (value == 'edit') {
-                  onEdit();
-                } else if (value == 'delete') {
-                  onDelete();
-                }
-              },
-              itemBuilder: (context) => [
-                const PopupMenuItem(
-                  value: 'edit',
-                  child: Row(
-                    children: [
-                      Icon(Icons.edit_rounded, size: 20),
-                      SizedBox(width: 12),
-                      Text('Edit'),
+                    if (field.isRequired) ...[
+                      const SizedBox(width: AppSpacing.xs),
+                      const Flexible(child: VaultBadge.required()),
                     ],
-                  ),
+                  ],
                 ),
-                PopupMenuItem(
-                  value: 'delete',
-                  child: Row(
-                    children: [
-                      Icon(Icons.delete_rounded, size: 20, color: colorScheme.error),
-                      const SizedBox(width: 12),
-                      Text('Delete', style: TextStyle(color: colorScheme.error)),
-                    ],
+                const SizedBox(height: AppSpacing.xxs),
+                Text(
+                  _getTypeLabel(field.type),
+                  style: theme.textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
                   ),
                 ),
               ],
             ),
-          ],
-        ),
+          ),
+          // Popup action menu
+          PopupMenuButton<String>(
+            tooltip: 'Field options for ${field.name}',
+            icon: Icon(
+              Icons.more_vert_rounded,
+              color: colorScheme.onSurfaceVariant,
+              size: 20,
+            ),
+            shape: RoundedRectangleBorder(
+              borderRadius: AppRadius.radiusCard,
+              side: AppBorders.subtle(colorScheme),
+            ),
+            onSelected: (value) {
+              if (value == 'edit') {
+                onEdit();
+              } else if (value == 'delete') {
+                onDelete();
+              }
+            },
+            itemBuilder: (context) => [
+              const PopupMenuItem(
+                value: 'edit',
+                child: Row(
+                  children: [
+                    Icon(Icons.edit_rounded, size: 20),
+                    SizedBox(width: AppSpacing.md),
+                    Text('Edit'),
+                  ],
+                ),
+              ),
+              const PopupMenuDivider(),
+              PopupMenuItem(
+                value: 'delete',
+                child: Row(
+                  children: [
+                    Icon(
+                      Icons.delete_rounded,
+                      size: 20,
+                      color: colorScheme.error,
+                    ),
+                    SizedBox(width: AppSpacing.md),
+                    Text('Delete', style: TextStyle(color: colorScheme.error)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }

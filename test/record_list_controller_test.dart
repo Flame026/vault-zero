@@ -82,7 +82,7 @@ void main() {
 
     testDbId = const Uuid().v4();
     final repo = SqliteSchemaRepository(db);
-    
+
     await repo.createDatabase(
       DatabaseDefinition(
         id: testDbId,
@@ -120,9 +120,7 @@ void main() {
     await repo.createField(ageField);
 
     container = ProviderContainer(
-      overrides: [
-        databaseProvider.overrideWith((ref) => db),
-      ],
+      overrides: [databaseProvider.overrideWith((ref) => db)],
     );
   });
 
@@ -132,24 +130,27 @@ void main() {
   });
 
   test('Record list loads successfully (empty initially)', () async {
-    final state = await container.read(recordListControllerProvider(testDbId).future);
+    final state = await container.read(
+      recordListControllerProvider(testDbId).future,
+    );
     expect(state, isEmpty);
   });
 
   test('Record creation and retrieval works with string parsing', () async {
-    final controller = container.read(recordListControllerProvider(testDbId).notifier);
-    
-    await controller.saveRecord(
-      fields: [nameField, ageField],
-      rawValues: {
-        nameField.id: 'John Doe',
-        ageField.id: '30',
-      },
+    final controller = container.read(
+      recordListControllerProvider(testDbId).notifier,
     );
 
-    final state = await container.read(recordListControllerProvider(testDbId).future);
+    await controller.saveRecord(
+      fields: [nameField, ageField],
+      rawValues: {nameField.id: 'John Doe', ageField.id: '30'},
+    );
+
+    final state = await container.read(
+      recordListControllerProvider(testDbId).future,
+    );
     expect(state.length, 1);
-    
+
     final record = state.first;
     expect(record.databaseId, testDbId);
     expect(record.values[nameField.id]?.value, 'John Doe');
@@ -157,31 +158,40 @@ void main() {
   });
 
   test('Strict parsing rejects invalid type conversions', () async {
-    final controller = container.read(recordListControllerProvider(testDbId).notifier);
-    
+    final controller = container.read(
+      recordListControllerProvider(testDbId).notifier,
+    );
+
     expect(
       () => controller.saveRecord(
         fields: [nameField, ageField],
-        rawValues: {
-          nameField.id: 'Jane Doe',
-          ageField.id: 'Not a number',
-        },
+        rawValues: {nameField.id: 'Jane Doe', ageField.id: 'Not a number'},
       ),
-      throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('Invalid integer value'))),
+      throwsA(
+        isA<Exception>().having(
+          (e) => e.toString(),
+          'message',
+          contains('Invalid integer value'),
+        ),
+      ),
     );
   });
 
   test('Record deletion works', () async {
-    final controller = container.read(recordListControllerProvider(testDbId).notifier);
-    
+    final controller = container.read(
+      recordListControllerProvider(testDbId).notifier,
+    );
+
     await controller.saveRecord(
       fields: [nameField],
       rawValues: {nameField.id: 'To Be Deleted'},
     );
 
-    var state = await container.read(recordListControllerProvider(testDbId).future);
+    var state = await container.read(
+      recordListControllerProvider(testDbId).future,
+    );
     expect(state.length, 1);
-    
+
     final recordId = state.first.id;
     await controller.deleteRecord(recordId);
 
@@ -189,34 +199,39 @@ void main() {
     expect(state, isEmpty);
   });
 
-  test('Record creation works with typed values (bool, num, DateTime)', () async {
-    final boolField = FieldDefinition(
-      id: const Uuid().v4(),
-      databaseId: testDbId,
-      name: 'Active',
-      type: FieldType.boolean,
-      position: 2,
-      isRequired: false,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    final repo = SqliteSchemaRepository(db);
-    await repo.createField(boolField);
+  test(
+    'Record creation works with typed values (bool, num, DateTime)',
+    () async {
+      final boolField = FieldDefinition(
+        id: const Uuid().v4(),
+        databaseId: testDbId,
+        name: 'Active',
+        type: FieldType.boolean,
+        position: 2,
+        isRequired: false,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      final repo = SqliteSchemaRepository(db);
+      await repo.createField(boolField);
 
-    final controller = container.read(recordListControllerProvider(testDbId).notifier);
-    await controller.saveRecord(
-      fields: [nameField, ageField, boolField],
-      rawValues: {
-        nameField.id: 'Alice',
-        ageField.id: 25,
-        boolField.id: true,
-      },
-    );
+      final controller = container.read(
+        recordListControllerProvider(testDbId).notifier,
+      );
+      await controller.saveRecord(
+        fields: [nameField, ageField, boolField],
+        rawValues: {nameField.id: 'Alice', ageField.id: 25, boolField.id: true},
+      );
 
-    final state = await container.read(recordListControllerProvider(testDbId).future);
-    final record = state.firstWhere((r) => r.values[nameField.id]?.value == 'Alice');
-    expect(record.values[nameField.id]?.value, 'Alice');
-    expect(record.values[ageField.id]?.value, 25);
-    expect(record.values[boolField.id]?.value, true);
-  });
+      final state = await container.read(
+        recordListControllerProvider(testDbId).future,
+      );
+      final record = state.firstWhere(
+        (r) => r.values[nameField.id]?.value == 'Alice',
+      );
+      expect(record.values[nameField.id]?.value, 'Alice');
+      expect(record.values[ageField.id]?.value, 25);
+      expect(record.values[boolField.id]?.value, true);
+    },
+  );
 }

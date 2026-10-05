@@ -19,7 +19,9 @@ final recordRepositoryProvider = FutureProvider<RecordRepository>((ref) async {
   return SqliteRecordRepository(db);
 });
 
-final backupRestoreServiceProvider = FutureProvider<BackupRestoreService>((ref) async {
+final backupRestoreServiceProvider = FutureProvider<BackupRestoreService>((
+  ref,
+) async {
   final db = await ref.watch(databaseProvider.future);
   return JsonBackupRestoreService(db);
 });

@@ -43,11 +43,35 @@ class SqliteSchemaRepository implements SchemaRepository {
 
   @override
   Future<void> deleteDatabase(String id) async {
-    await db.delete(
-      'databases',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.transaction((txn) async {
+      final tables = await txn.query(
+        'sqlite_master',
+        columns: ['name'],
+        where: 'type = ?',
+        whereArgs: ['table'],
+      );
+      final tableNames = tables.map((t) => t['name'] as String).toSet();
+
+      if (tableNames.contains('field_values') &&
+          tableNames.contains('records')) {
+        await txn.rawDelete(
+          '''
+          DELETE FROM field_values
+          WHERE record_id IN (SELECT id FROM records WHERE database_id = ?)
+        ''',
+          [id],
+        );
+      }
+      if (tableNames.contains('records')) {
+        await txn.delete('records', where: 'database_id = ?', whereArgs: [id]);
+      }
+      if (tableNames.contains('fields')) {
+        await txn.delete('fields', where: 'database_id = ?', whereArgs: [id]);
+      }
+      if (tableNames.contains('databases')) {
+        await txn.delete('databases', where: 'id = ?', whereArgs: [id]);
+      }
+    });
   }
 
   @override
@@ -92,8 +116,12 @@ class SqliteSchemaRepository implements SchemaRepository {
         name: row['name'] as String,
         description: row['description'] as String,
         fields: fieldsByDb[id] ?? const [],
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          row['created_at'] as int,
+        ),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(
+          row['updated_at'] as int,
+        ),
       );
     }).toList();
   }
@@ -107,7 +135,9 @@ class SqliteSchemaRepository implements SchemaRepository {
   Future<void> updateField(FieldDefinition field) async {
     String? configJson;
     if (field.configuration is ChoiceConfig) {
-      configJson = jsonEncode({'options': (field.configuration as ChoiceConfig).options});
+      configJson = jsonEncode({
+        'options': (field.configuration as ChoiceConfig).options,
+      });
     }
 
     await db.update(
@@ -131,7 +161,9 @@ class SqliteSchemaRepository implements SchemaRepository {
       for (final field in fields) {
         String? configJson;
         if (field.configuration is ChoiceConfig) {
-          configJson = jsonEncode({'options': (field.configuration as ChoiceConfig).options});
+          configJson = jsonEncode({
+            'options': (field.configuration as ChoiceConfig).options,
+          });
         }
 
         await txn.update(
@@ -153,11 +185,26 @@ class SqliteSchemaRepository implements SchemaRepository {
 
   @override
   Future<void> deleteField(String id) async {
-    await db.delete(
-      'fields',
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    await db.transaction((txn) async {
+      final tables = await txn.query(
+        'sqlite_master',
+        columns: ['name'],
+        where: 'type = ?',
+        whereArgs: ['table'],
+      );
+      final tableNames = tables.map((t) => t['name'] as String).toSet();
+
+      if (tableNames.contains('field_values')) {
+        await txn.delete(
+          'field_values',
+          where: 'field_id = ?',
+          whereArgs: [id],
+        );
+      }
+      if (tableNames.contains('fields')) {
+        await txn.delete('fields', where: 'id = ?', whereArgs: [id]);
+      }
+    });
   }
 
   @override
@@ -178,7 +225,9 @@ class SqliteSchemaRepository implements SchemaRepository {
     if (configJson != null) {
       final map = jsonDecode(configJson) as Map<String, dynamic>;
       if (map.containsKey('options')) {
-        config = ChoiceConfig(options: List<String>.from(map['options'] as List));
+        config = ChoiceConfig(
+          options: List<String>.from(map['options'] as List),
+        );
       }
     }
 
@@ -186,7 +235,9 @@ class SqliteSchemaRepository implements SchemaRepository {
       id: row['id'] as String,
       databaseId: row['database_id'] as String,
       name: row['name'] as String,
-      type: FieldType.values.firstWhere((e) => e.name == row['type']),
+      type:
+          FieldType.values.where((e) => e.name == row['type']).firstOrNull ??
+          FieldType.text,
       position: row['position'] as int,
       isRequired: (row['is_required'] as int) == 1,
       configuration: config,
@@ -195,10 +246,15 @@ class SqliteSchemaRepository implements SchemaRepository {
     );
   }
 
-  Future<void> _insertField(DatabaseExecutor executor, FieldDefinition field) async {
+  Future<void> _insertField(
+    DatabaseExecutor executor,
+    FieldDefinition field,
+  ) async {
     String? configJson;
     if (field.configuration is ChoiceConfig) {
-      configJson = jsonEncode({'options': (field.configuration as ChoiceConfig).options});
+      configJson = jsonEncode({
+        'options': (field.configuration as ChoiceConfig).options,
+      });
     }
 
     await executor.insert('fields', {

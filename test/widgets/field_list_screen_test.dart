@@ -18,7 +18,7 @@ void main() {
 
   setUpAll(() {
     sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    databaseFactory = databaseFactoryFfiNoIsolate;
   });
 
   setUp(() async {
@@ -64,95 +64,103 @@ void main() {
 
   Widget buildTestWidget(DatabaseDefinition database) {
     return ProviderScope(
-      overrides: [
-        databaseProvider.overrideWith((ref) => db),
-      ],
-      child: MaterialApp(
-        home: FieldListScreen(database: database),
-      ),
+      overrides: [databaseProvider.overrideWith((ref) => db)],
+      child: MaterialApp(home: FieldListScreen(database: database)),
     );
   }
 
-  testWidgets('FieldListScreen displays empty state when database has no fields', (tester) async {
-    final database = DatabaseDefinition(
-      id: testDbId,
-      name: 'Empty DB',
-      description: '',
-      fields: [],
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    await schemaRepo.createDatabase(database);
-
-    await tester.pumpWidget(buildTestWidget(database));
-    await tester.pumpAndSettle();
-
-    expect(find.text('Empty DB Fields'), findsOneWidget);
-    expect(find.text('No Fields Defined'), findsOneWidget);
-    expect(find.text('Tap + to create your first field.'), findsOneWidget);
-    expect(find.text('New Field'), findsOneWidget);
-  });
-
-  testWidgets('FieldListScreen renders ReorderableListView with fields and allows deletion', (tester) async {
-    final fields = [
-      FieldDefinition(
-        id: 'f1',
-        databaseId: testDbId,
-        name: 'Field Alpha',
-        type: FieldType.text,
-        position: 0,
+  testWidgets(
+    'FieldListScreen displays empty state when database has no fields',
+    (tester) async {
+      final database = DatabaseDefinition(
+        id: testDbId,
+        name: 'Empty DB',
+        description: '',
+        fields: [],
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-      ),
-      FieldDefinition(
-        id: 'f2',
-        databaseId: testDbId,
-        name: 'Field Beta',
-        type: FieldType.boolean,
-        position: 1,
+      );
+      await schemaRepo.createDatabase(database);
+
+      await tester.pumpWidget(buildTestWidget(database));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Empty DB Fields'), findsOneWidget);
+      expect(find.text('Database Schema'), findsOneWidget);
+      expect(
+        find.text(
+          "This database has no fields.\nAdd fields to define what you want to track.",
+        ),
+        findsOneWidget,
+      );
+      expect(find.text('Add Field'), findsOneWidget);
+      expect(find.text('New Field'), findsOneWidget);
+    },
+  );
+
+  testWidgets(
+    'FieldListScreen renders ReorderableListView with fields and allows deletion',
+    (tester) async {
+      final fields = [
+        FieldDefinition(
+          id: 'f1',
+          databaseId: testDbId,
+          name: 'Field Alpha',
+          type: FieldType.text,
+          position: 0,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+        FieldDefinition(
+          id: 'f2',
+          databaseId: testDbId,
+          name: 'Field Beta',
+          type: FieldType.boolean,
+          position: 1,
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      ];
+
+      final database = DatabaseDefinition(
+        id: testDbId,
+        name: 'Inventory',
+        description: '',
+        fields: fields,
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-      ),
-    ];
+      );
+      await schemaRepo.createDatabase(database);
 
-    final database = DatabaseDefinition(
-      id: testDbId,
-      name: 'Inventory',
-      description: '',
-      fields: fields,
-      createdAt: DateTime.now(),
-      updatedAt: DateTime.now(),
-    );
-    await schemaRepo.createDatabase(database);
+      await tester.pumpWidget(buildTestWidget(database));
+      await tester.pumpAndSettle();
 
-    await tester.pumpWidget(buildTestWidget(database));
-    await tester.pumpAndSettle();
+      expect(find.text('Inventory Fields'), findsOneWidget);
+      expect(find.byType(ReorderableListView), findsOneWidget);
+      expect(find.byType(FieldCard), findsNWidgets(2));
+      expect(find.text('Field Alpha'), findsOneWidget);
+      expect(find.text('Field Beta'), findsOneWidget);
 
-    expect(find.text('Inventory Fields'), findsOneWidget);
-    expect(find.byType(ReorderableListView), findsOneWidget);
-    expect(find.byType(FieldCard), findsNWidgets(2));
-    expect(find.text('Field Alpha'), findsOneWidget);
-    expect(find.text('Field Beta'), findsOneWidget);
+      // Open popup menu on first field card
+      final popupFinder = find.byIcon(Icons.more_vert_rounded).first;
+      await tester.tap(popupFinder);
+      await tester.pumpAndSettle();
 
-    // Open popup menu on first field card
-    final popupFinder = find.byIcon(Icons.more_vert_rounded).first;
-    await tester.tap(popupFinder);
-    await tester.pumpAndSettle();
+      expect(find.text('Delete'), findsOneWidget);
+      await tester.tap(find.text('Delete'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Delete'), findsOneWidget);
-    await tester.tap(find.text('Delete'));
-    await tester.pumpAndSettle();
+      // Verify confirmation dialog
+      expect(find.text('Delete Field?'), findsOneWidget);
+      expect(find.text('Delete Permanently'), findsOneWidget);
 
-    // Verify confirmation dialog
-    expect(find.text('Delete Field?'), findsOneWidget);
-    expect(find.text('Delete Permanently'), findsOneWidget);
+      // Confirm deletion
+      await tester.tap(find.text('Delete Permanently'));
+      await tester.pumpAndSettle();
 
-    // Confirm deletion
-    await tester.tap(find.text('Delete Permanently'));
-    await tester.pumpAndSettle();
-
-    // Field Alpha is now deleted, Field Beta remains
-    expect(find.text('Field Alpha'), findsNothing);
-    expect(find.text('Field Beta'), findsOneWidget);
-  });
+      // Field Alpha is now deleted, Field Beta remains
+      expect(find.text('Field Alpha'), findsNothing);
+      expect(find.text('Field Beta'), findsOneWidget);
+    },
+  );
 }

@@ -8,6 +8,10 @@ import '../../../domain/models/record.dart';
 
 import '../../../domain/models/record_page.dart';
 
+final isFetchingMoreProvider = StateProvider.family<bool, String>((ref, id) {
+  return false;
+});
+
 class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
   RecordCursor? _nextCursor;
   bool _hasMore = true;
@@ -31,15 +35,23 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
   }
 
   Future<void> loadMore() async {
-    if (!_hasMore || _isFetchingMore) return;
+    if (!_hasMore || _isFetchingMore) {
+      return;
+    }
 
     _isFetchingMore = true;
-    // Notify listeners so UI can show loading indicator
-    state = AsyncValue.data(state.value ?? []);
+    ref.read(isFetchingMoreProvider(arg).notifier).state = true;
+    if (state.hasError && state.hasValue) {
+      state = AsyncValue.data(state.value!);
+    }
 
     try {
       final repository = await ref.read(recordRepositoryProvider.future);
-      final page = await repository.getRecordsPage(arg, limit: 50, after: _nextCursor);
+      final page = await repository.getRecordsPage(
+        arg,
+        limit: 50,
+        after: _nextCursor,
+      );
 
       _nextCursor = page.nextCursor;
       _hasMore = page.hasMore;
@@ -47,13 +59,10 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
       final currentRecords = state.value ?? [];
       state = AsyncValue.data([...currentRecords, ...page.records]);
     } catch (e, st) {
-      state = AsyncValue.error(e, st);
+      state = AsyncError<List<Record>>(e, st).copyWithPrevious(state);
     } finally {
       _isFetchingMore = false;
-      // Trigger rebuild to remove loading indicator if no error
-      if (!state.hasError) {
-        state = AsyncValue.data(state.value ?? []);
-      }
+      ref.read(isFetchingMoreProvider(arg).notifier).state = false;
     }
   }
 
@@ -63,87 +72,165 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
     required Map<String, dynamic> rawValues,
   }) async {
     final repository = await ref.read(recordRepositoryProvider.future);
-    
+
     final recordId = existingRecord?.id ?? const Uuid().v4();
     final now = DateTime.now();
-    
+
     final Map<String, FieldValue> fieldValues = {};
-    
+
     for (final field in fields) {
       final dynamic raw = rawValues[field.id];
       final String rawString = raw == null ? '' : raw.toString().trim();
       final valueId = existingRecord?.values[field.id]?.id ?? const Uuid().v4();
-      
+
       FieldValue fieldValue;
-      
+
       try {
         switch (field.type) {
           case FieldType.text:
           case FieldType.longText:
-            fieldValue = field.type == FieldType.text 
-              ? TextFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: rawString)
-              : LongTextFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: rawString);
+            fieldValue = field.type == FieldType.text
+                ? TextFieldValue(
+                    id: valueId,
+                    recordId: recordId,
+                    fieldId: field.id,
+                    value: rawString,
+                  )
+                : LongTextFieldValue(
+                    id: valueId,
+                    recordId: recordId,
+                    fieldId: field.id,
+                    value: rawString,
+                  );
             break;
-            
+
           case FieldType.integer:
             if (raw == null || (raw is String && raw.isEmpty)) {
               if (!field.isRequired) {
-                fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0);
+                fieldValue = IntegerFieldValue(
+                  id: valueId,
+                  recordId: recordId,
+                  fieldId: field.id,
+                  value: 0,
+                );
                 break;
               }
-              throw Exception('Invalid integer value for field "${field.name}"');
+              throw Exception(
+                'Invalid integer value for field "${field.name}"',
+              );
             }
             final parsedInt = raw is int ? raw : int.tryParse(rawString);
             if (parsedInt == null) {
-              throw Exception('Invalid integer value for field "${field.name}"');
+              throw Exception(
+                'Invalid integer value for field "${field.name}"',
+              );
             }
-            fieldValue = IntegerFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedInt);
+            fieldValue = IntegerFieldValue(
+              id: valueId,
+              recordId: recordId,
+              fieldId: field.id,
+              value: parsedInt,
+            );
             break;
-            
+
           case FieldType.decimal:
             if (raw == null || (raw is String && raw.isEmpty)) {
               if (!field.isRequired) {
-                fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: 0.0);
+                fieldValue = DecimalFieldValue(
+                  id: valueId,
+                  recordId: recordId,
+                  fieldId: field.id,
+                  value: 0.0,
+                );
                 break;
               }
-              throw Exception('Invalid decimal value for field "${field.name}"');
+              throw Exception(
+                'Invalid decimal value for field "${field.name}"',
+              );
             }
-            final parsedDouble = raw is num ? raw.toDouble() : double.tryParse(rawString);
-            if (parsedDouble == null) {
-              throw Exception('Invalid decimal value for field "${field.name}"');
+            final parsedDouble = raw is num
+                ? raw.toDouble()
+                : double.tryParse(rawString);
+            if (parsedDouble == null || !parsedDouble.isFinite) {
+              throw Exception(
+                'Invalid decimal value for field "${field.name}"',
+              );
             }
-            fieldValue = DecimalFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedDouble);
+            fieldValue = DecimalFieldValue(
+              id: valueId,
+              recordId: recordId,
+              fieldId: field.id,
+              value: parsedDouble,
+            );
             break;
-            
+
           case FieldType.boolean:
             final boolVal = raw is bool
                 ? raw
-                : (rawString.toLowerCase() == 'true' || rawString.toLowerCase() == 'yes' || rawString == '1');
-            fieldValue = BooleanFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: boolVal);
+                : (rawString.toLowerCase() == 'true' ||
+                      rawString.toLowerCase() == 'yes' ||
+                      rawString == '1');
+            fieldValue = BooleanFieldValue(
+              id: valueId,
+              recordId: recordId,
+              fieldId: field.id,
+              value: boolVal,
+            );
             break;
-            
+
           case FieldType.date:
           case FieldType.dateTime:
             if (raw == null || (raw is String && raw.isEmpty)) {
               if (!field.isRequired) {
                 fieldValue = field.type == FieldType.date
-                    ? DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970))
-                    : DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: DateTime(1970));
+                    ? DateFieldValue(
+                        id: valueId,
+                        recordId: recordId,
+                        fieldId: field.id,
+                        value: DateTime(1970),
+                      )
+                    : DateTimeFieldValue(
+                        id: valueId,
+                        recordId: recordId,
+                        fieldId: field.id,
+                        value: DateTime(1970),
+                      );
                 break;
               }
-              throw Exception('Invalid date format for field "${field.name}". Use YYYY-MM-DD');
+              throw Exception(
+                'Invalid date format for field "${field.name}". Use YYYY-MM-DD',
+              );
             }
-            final parsedDate = raw is DateTime ? raw : DateTime.tryParse(rawString);
+            final parsedDate = raw is DateTime
+                ? raw
+                : DateTime.tryParse(rawString);
             if (parsedDate == null) {
-              throw Exception('Invalid date format for field "${field.name}". Use YYYY-MM-DD');
+              throw Exception(
+                'Invalid date format for field "${field.name}". Use YYYY-MM-DD',
+              );
             }
             fieldValue = field.type == FieldType.date
-                ? DateFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedDate)
-                : DateTimeFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: parsedDate);
+                ? DateFieldValue(
+                    id: valueId,
+                    recordId: recordId,
+                    fieldId: field.id,
+                    value: parsedDate,
+                  )
+                : DateTimeFieldValue(
+                    id: valueId,
+                    recordId: recordId,
+                    fieldId: field.id,
+                    value: parsedDate,
+                  );
             break;
-            
+
           case FieldType.choice:
-            fieldValue = ChoiceFieldValue(id: valueId, recordId: recordId, fieldId: field.id, value: rawString);
+            fieldValue = ChoiceFieldValue(
+              id: valueId,
+              recordId: recordId,
+              fieldId: field.id,
+              value: rawString,
+            );
             break;
         }
       } catch (e) {
@@ -152,7 +239,7 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
         }
         throw Exception('Failed to save field "${field.name}"');
       }
-      
+
       fieldValues[field.id] = fieldValue;
     }
 
@@ -179,21 +266,15 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
         state = AsyncValue.data(newRecords);
       }
     } else {
-      // Create: Records are ordered by created_at ASC.
-      // A newly created record goes at the very end of the database.
-      if (!_hasMore) {
-        // We have loaded the end of the database, so append it visually
-        state = AsyncValue.data([...currentRecords, newRecord]);
-      } else {
-        // We haven't scrolled to the end yet, so don't append it to the current UI list
-        // It will be loaded naturally when the user reaches the last page.
-      }
+      // Create: Prepend the new record so user immediately sees it at the top,
+      // matching SQLite ORDER BY created_at DESC keyset pagination.
+      state = AsyncValue.data([newRecord, ...currentRecords]);
     }
   }
 
   Future<void> deleteRecord(String id) async {
     final repository = await ref.read(recordRepositoryProvider.future);
-    
+
     // Delete through repository
     await repository.deleteRecord(id);
 
@@ -204,6 +285,7 @@ class RecordListController extends FamilyAsyncNotifier<List<Record>, String> {
   }
 }
 
-final recordListControllerProvider = AsyncNotifierProviderFamily<RecordListController, List<Record>, String>(() {
-  return RecordListController();
-});
+final recordListControllerProvider =
+    AsyncNotifierProviderFamily<RecordListController, List<Record>, String>(() {
+      return RecordListController();
+    });

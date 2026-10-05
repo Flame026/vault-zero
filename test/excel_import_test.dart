@@ -191,95 +191,135 @@ void main() {
       expect(orderRows[0], ['O100', '250']);
     });
 
-    test('Reuses cached decoded workbook across getSheetNames, getHeaders, and getRows', () async {
-      final file = createTempExcel('cached.xlsx', (excel) {
-        final sheet = excel['Sheet1'];
-        sheet.appendRow([TextCellValue('Col1'), TextCellValue('Col2')]);
-        sheet.appendRow([TextCellValue('V1'), TextCellValue('V2')]);
-      });
+    test(
+      'Reuses cached decoded workbook across getSheetNames, getHeaders, and getRows',
+      () async {
+        final file = createTempExcel('cached.xlsx', (excel) {
+          final sheet = excel['Sheet1'];
+          sheet.appendRow([TextCellValue('Col1'), TextCellValue('Col2')]);
+          sheet.appendRow([TextCellValue('V1'), TextCellValue('V2')]);
+        });
 
-      final source = ExcelDataSource(file);
-      final sheets = await source.getSheetNames();
-      expect(sheets, contains('Sheet1'));
+        final source = ExcelDataSource(file);
+        final sheets = await source.getSheetNames();
+        expect(sheets, contains('Sheet1'));
 
-      final headers = await source.getHeaders();
-      expect(headers, ['Col1', 'Col2']);
+        final headers = await source.getHeaders();
+        expect(headers, ['Col1', 'Col2']);
 
-      final rows = await source.getRows().toList();
-      expect(rows.length, 1);
-      expect(rows[0], ['V1', 'V2']);
-    });
+        final rows = await source.getRows().toList();
+        expect(rows.length, 1);
+        expect(rows[0], ['V1', 'V2']);
+      },
+    );
 
     test('Throws on empty file or empty worksheet', () async {
       final emptyFile = File('${tempDir.path}/empty.xlsx');
       emptyFile.writeAsBytesSync([]);
 
       final emptySource = ExcelDataSource(emptyFile);
-      expect(() => emptySource.getSheetNames(), throwsA(isA<FormatException>()));
+      expect(
+        () => emptySource.getSheetNames(),
+        throwsA(isA<FormatException>()),
+      );
 
       final emptySheetFile = createTempExcel('empty_sheet.xlsx', (excel) {
         excel['EmptySheet'];
         excel.delete('Sheet1');
       });
 
-      final emptySheetSource = ExcelDataSource(emptySheetFile, sheetName: 'EmptySheet');
-      expect(() => emptySheetSource.getHeaders(), throwsA(isA<FormatException>()));
+      final emptySheetSource = ExcelDataSource(
+        emptySheetFile,
+        sheetName: 'EmptySheet',
+      );
+      expect(
+        () => emptySheetSource.getHeaders(),
+        throwsA(isA<FormatException>()),
+      );
+
+      final blankHeadersFile = createTempExcel('blank_headers.xlsx', (excel) {
+        final sheet = excel['BlankHeaders'];
+        sheet.appendRow([TextCellValue('   '), null, TextCellValue('')]);
+        excel.delete('Sheet1');
+      });
+
+      final blankHeadersSource = ExcelDataSource(
+        blankHeadersFile,
+        sheetName: 'BlankHeaders',
+      );
+      expect(
+        () => blankHeadersSource.getHeaders(),
+        throwsA(isA<FormatException>()),
+      );
     });
   });
 
   group('ExcelDataSource - Cell Types & Value Conversions', () {
-    test('Faithfully converts text, int, double (preserving decimal precision), bool, dates, time, formula, multiline', () async {
-      final file = createTempExcel('cell_types.xlsx', (excel) {
-        final sheet = excel['Sheet1'];
-        sheet.appendRow([
-          TextCellValue('TextCol'),
-          TextCellValue('IntCol'),
-          TextCellValue('DoubleCol'),
-          TextCellValue('DoubleDecimalCol'),
-          TextCellValue('BoolCol'),
-          TextCellValue('DateCol'),
-          TextCellValue('DateTimeCol'),
-          TextCellValue('TimeCol'),
-          TextCellValue('FormulaCol'),
-          TextCellValue('MultilineCol'),
-          TextCellValue('EmptyCol'),
-        ]);
+    test(
+      'Faithfully converts text, int, double (preserving decimal precision), bool, dates, time, formula, multiline',
+      () async {
+        final file = createTempExcel('cell_types.xlsx', (excel) {
+          final sheet = excel['Sheet1'];
+          sheet.appendRow([
+            TextCellValue('TextCol'),
+            TextCellValue('IntCol'),
+            TextCellValue('DoubleCol'),
+            TextCellValue('DoubleDecimalCol'),
+            TextCellValue('BoolCol'),
+            TextCellValue('DateCol'),
+            TextCellValue('DateTimeCol'),
+            TextCellValue('TimeCol'),
+            TextCellValue('FormulaCol'),
+            TextCellValue('MultilineCol'),
+            TextCellValue('EmptyCol'),
+          ]);
 
-        sheet.appendRow([
-          TextCellValue('Hello'),
-          IntCellValue(42),
-          DoubleCellValue(3.1415),
-          DoubleCellValue(42.75),
-          BoolCellValue(true),
-          DateCellValue(year: 2026, month: 8, day: 14),
-          DateTimeCellValue(year: 2026, month: 8, day: 14, hour: 10, minute: 30, second: 0),
-          TimeCellValue(hour: 14, minute: 45, second: 10),
-          FormulaCellValue('=SUM(A1:B1)'),
-          TextCellValue('Line 1\r\nLine 2\rLine 3\nLine 4'),
-          null,
-        ]);
-      });
+          sheet.appendRow([
+            TextCellValue('Hello'),
+            IntCellValue(42),
+            DoubleCellValue(3.1415),
+            DoubleCellValue(42.75),
+            BoolCellValue(true),
+            DateCellValue(year: 2026, month: 8, day: 14),
+            DateTimeCellValue(
+              year: 2026,
+              month: 8,
+              day: 14,
+              hour: 10,
+              minute: 30,
+              second: 0,
+            ),
+            TimeCellValue(hour: 14, minute: 45, second: 10),
+            FormulaCellValue('=SUM(A1:B1)'),
+            TextCellValue('Line 1\r\nLine 2\rLine 3\nLine 4'),
+            null,
+          ]);
+        });
 
-      final source = ExcelDataSource(file);
-      final headers = await source.getHeaders();
-      expect(headers.length, 11);
+        final source = ExcelDataSource(file);
+        final headers = await source.getHeaders();
+        expect(headers.length, 11);
 
-      final rows = await source.getRows().toList();
-      expect(rows.length, 1);
+        final rows = await source.getRows().toList();
+        expect(rows.length, 1);
 
-      final row = rows[0];
-      expect(row[0], 'Hello');
-      expect(row[1], '42');
-      expect(row[2], '3.1415');
-      expect(row[3], '42.75'); // Preserves numeric decimal representation without truncation
-      expect(row[4], 'true');
-      expect(row[5], '2026-08-14');
-      expect(row[6], '2026-08-14 10:30:00');
-      expect(row[7], '14:45:10');
-      expect(row[8], '=SUM(A1:B1)');
-      expect(row[9], 'Line 1\nLine 2\nLine 3\nLine 4');
-      expect(row[10], ''); // Null / empty cell becomes empty string
-    });
+        final row = rows[0];
+        expect(row[0], 'Hello');
+        expect(row[1], '42');
+        expect(row[2], '3.1415');
+        expect(
+          row[3],
+          '42.75',
+        ); // Preserves numeric decimal representation without truncation
+        expect(row[4], 'true');
+        expect(row[5], '2026-08-14');
+        expect(row[6], '2026-08-14 10:30:00');
+        expect(row[7], '14:45:10');
+        expect(row[8], '=SUM(A1:B1)');
+        expect(row[9], 'Line 1\nLine 2\nLine 3\nLine 4');
+        expect(row[10], ''); // Null / empty cell becomes empty string
+      },
+    );
 
     test('Preview read does not interfere with actual import read', () async {
       final file = createTempExcel('preview_test.xlsx', (excel) {
@@ -305,71 +345,86 @@ void main() {
   });
 
   group('ImportService - End-to-End Excel Import', () {
-    test('Imports Excel worksheet into new database with normalized headers and text fields', () async {
-      final file = createTempExcel('full_import.xlsx', (excel) {
-        final sheet = excel['Sheet1'];
-        sheet.appendRow([
-          TextCellValue('  Title  '),
-          TextCellValue('Title'),
-          TextCellValue(''),
-          TextCellValue('Score'),
-        ]);
+    test(
+      'Imports Excel worksheet into new database with normalized headers and text fields',
+      () async {
+        final file = createTempExcel('full_import.xlsx', (excel) {
+          final sheet = excel['Sheet1'];
+          sheet.appendRow([
+            TextCellValue('  Title  '),
+            TextCellValue('Title'),
+            TextCellValue(''),
+            TextCellValue('Score'),
+          ]);
 
-        sheet.appendRow([
-          TextCellValue('Inception'),
-          TextCellValue('Movie'),
-          TextCellValue('Extra'),
-          DoubleCellValue(9.5),
-        ]);
+          sheet.appendRow([
+            TextCellValue('Inception'),
+            TextCellValue('Movie'),
+            TextCellValue('Extra'),
+            DoubleCellValue(9.5),
+          ]);
 
-        sheet.appendRow([
-          TextCellValue('Interstellar'),
-          TextCellValue('SciFi'),
-          TextCellValue(''),
-          DoubleCellValue(9.0),
-        ]);
+          sheet.appendRow([
+            TextCellValue('Interstellar'),
+            TextCellValue('SciFi'),
+            TextCellValue(''),
+            DoubleCellValue(9.0),
+          ]);
 
-        // Blank row
-        sheet.appendRow([null, null, null, null]);
+          // Blank row
+          sheet.appendRow([null, null, null, null]);
 
-        // Row with missing cells (sparse)
-        sheet.appendRow([
-          TextCellValue('Tenet'),
-          TextCellValue('Action'),
-        ]);
-      });
+          // Row with missing cells (sparse)
+          sheet.appendRow([TextCellValue('Tenet'), TextCellValue('Action')]);
+        });
 
-      final source = ExcelDataSource(file);
-      await importService.importDatabase('Movies DB', source);
+        final source = ExcelDataSource(file);
+        await importService.importDatabase('Movies DB', source);
 
-      final databases = await schemaRepo.getAllDatabases();
-      expect(databases.length, 1);
+        final databases = await schemaRepo.getAllDatabases();
+        expect(databases.length, 1);
 
-      final dbDef = databases.first;
-      expect(dbDef.name, 'Movies DB');
-      expect(dbDef.fields.length, 4);
+        final dbDef = databases.first;
+        expect(dbDef.name, 'Movies DB');
+        expect(dbDef.fields.length, 4);
 
-      expect(dbDef.fields[0].name, 'Title');
-      expect(dbDef.fields[1].name, 'Title (1)');
-      expect(dbDef.fields[2].name, 'Column A');
-      expect(dbDef.fields[3].name, 'Score');
+        expect(dbDef.fields[0].name, 'Title');
+        expect(dbDef.fields[1].name, 'Title (1)');
+        expect(dbDef.fields[2].name, 'Column A');
+        expect(dbDef.fields[3].name, 'Score');
 
-      for (final field in dbDef.fields) {
-        expect(field.type, FieldType.text);
-        expect(field.isRequired, isFalse);
-      }
+        for (final field in dbDef.fields) {
+          expect(field.type, FieldType.text);
+          expect(field.isRequired, isFalse);
+        }
 
-      final records = await recordRepo.getRecordsForDatabase(dbDef.id);
-      expect(records.length, 3); // 1 blank row skipped, sparse row padded
+        final records = await recordRepo.getRecordsForDatabase(dbDef.id);
+        expect(records.length, 3); // 1 blank row skipped, sparse row padded
 
-      expect((records[0].values[dbDef.fields[0].id] as TextFieldValue).value, 'Inception');
-      expect((records[0].values[dbDef.fields[3].id] as TextFieldValue).value, '9.5');
+        expect(
+          (records[0].values[dbDef.fields[0].id] as TextFieldValue).value,
+          'Inception',
+        );
+        expect(
+          (records[0].values[dbDef.fields[3].id] as TextFieldValue).value,
+          '9.5',
+        );
 
-      // Check sparse row padding
-      expect((records[2].values[dbDef.fields[0].id] as TextFieldValue).value, 'Tenet');
-      expect((records[2].values[dbDef.fields[2].id] as TextFieldValue).value, '');
-      expect((records[2].values[dbDef.fields[3].id] as TextFieldValue).value, '');
-    });
+        // Check sparse row padding
+        expect(
+          (records[2].values[dbDef.fields[0].id] as TextFieldValue).value,
+          'Tenet',
+        );
+        expect(
+          (records[2].values[dbDef.fields[2].id] as TextFieldValue).value,
+          '',
+        );
+        expect(
+          (records[2].values[dbDef.fields[3].id] as TextFieldValue).value,
+          '',
+        );
+      },
+    );
 
     test('Rollback cleans up partial database on failure', () async {
       final file = createTempExcel('fail_excel.xlsx', (excel) {
@@ -385,44 +440,68 @@ void main() {
 
       expect(
         () => importService.importDatabase('Fail Excel DB', failingSource),
-        throwsA(isA<Exception>().having((e) => e.toString(), 'message', contains('Changes reverted'))),
+        throwsA(
+          isA<Exception>().having(
+            (e) => e.toString(),
+            'message',
+            contains('Changes reverted'),
+          ),
+        ),
       );
 
       final databases = await schemaRepo.getAllDatabases();
-      expect(databases, isEmpty, reason: 'Database should have been rolled back and cascade-deleted');
+      expect(
+        databases,
+        isEmpty,
+        reason: 'Database should have been rolled back and cascade-deleted',
+      );
     });
 
-    test('Large workbook import with 1200 rows across multiple batches', () async {
-      final file = createTempExcel('large_excel.xlsx', (excel) {
-        final sheet = excel['Sheet1'];
-        sheet.appendRow([
-          TextCellValue('ID'),
-          TextCellValue('Name'),
-          TextCellValue('Count'),
-        ]);
-
-        for (var i = 0; i < 1200; i++) {
+    test(
+      'Large workbook import with 1200 rows across multiple batches',
+      () async {
+        final file = createTempExcel('large_excel.xlsx', (excel) {
+          final sheet = excel['Sheet1'];
           sheet.appendRow([
-            TextCellValue('rec_$i'),
-            TextCellValue('Item $i'),
-            IntCellValue(i),
+            TextCellValue('ID'),
+            TextCellValue('Name'),
+            TextCellValue('Count'),
           ]);
-        }
-      });
 
-      final source = ExcelDataSource(file);
-      await importService.importDatabase('Large Excel DB', source);
+          for (var i = 0; i < 1200; i++) {
+            sheet.appendRow([
+              TextCellValue('rec_$i'),
+              TextCellValue('Item $i'),
+              IntCellValue(i),
+            ]);
+          }
+        });
 
-      final databases = await schemaRepo.getAllDatabases();
-      expect(databases.length, 1);
+        final source = ExcelDataSource(file);
+        await importService.importDatabase('Large Excel DB', source);
 
-      final records = await recordRepo.getRecordsForDatabase(databases.first.id);
-      expect(records.length, 1200);
+        final databases = await schemaRepo.getAllDatabases();
+        expect(databases.length, 1);
 
-      final fields = databases.first.fields;
-      expect((records[0].values[fields[0].id] as TextFieldValue).value, 'rec_0');
-      expect((records[1199].values[fields[0].id] as TextFieldValue).value, 'rec_1199');
-      expect((records[1199].values[fields[2].id] as TextFieldValue).value, '1199');
-    });
+        final records = await recordRepo.getRecordsForDatabase(
+          databases.first.id,
+        );
+        expect(records.length, 1200);
+
+        final fields = databases.first.fields;
+        expect(
+          (records[0].values[fields[0].id] as TextFieldValue).value,
+          'rec_0',
+        );
+        expect(
+          (records[1199].values[fields[0].id] as TextFieldValue).value,
+          'rec_1199',
+        );
+        expect(
+          (records[1199].values[fields[2].id] as TextFieldValue).value,
+          '1199',
+        );
+      },
+    );
   });
 }

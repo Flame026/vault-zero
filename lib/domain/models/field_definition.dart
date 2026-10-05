@@ -95,11 +95,19 @@ class FieldDefinition {
       }
     }
 
+    final typeName = json['type'] as String?;
+    final fieldType = FieldType.values
+        .where((e) => e.name == typeName)
+        .firstOrNull;
+    if (fieldType == null) {
+      throw FormatException('Unknown field type: $typeName');
+    }
+
     return FieldDefinition(
       id: json['id'] as String,
       databaseId: json['databaseId'] as String,
       name: json['name'] as String,
-      type: FieldType.values.firstWhere((e) => e.name == json['type']),
+      type: fieldType,
       position: json['position'] as int,
       isRequired: json['isRequired'] as bool? ?? false,
       configuration: config,

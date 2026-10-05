@@ -135,37 +135,45 @@ void main() {
   File createTempCsv(String fileName, String content) {
     final file = File('${tempDir.path}/$fileName');
     // Ensure all test fixtures use proper CRLF as expected by the default CSV parser
-    final normalizedContent = content.replaceAll('\r\n', '\n').replaceAll('\n', '\r\n');
+    final normalizedContent = content
+        .replaceAll('\r\n', '\n')
+        .replaceAll('\n', '\r\n');
     file.writeAsStringSync(normalizedContent, encoding: utf8);
     return file;
   }
 
   group('CsvDataSource (Parser)', () {
-    test('Correctly parses headers and rows including multiline and escaped quotes', () async {
-      final file = createTempCsv('basic.csv', '''
+    test(
+      'Correctly parses headers and rows including multiline and escaped quotes',
+      () async {
+        final file = createTempCsv('basic.csv', '''
 Name, Age, "", Name, Description
 John Doe, 30, x, Jane Doe,"A person
 with a multiline
 description"
 "Escaped ""quotes""", 25, y,, 
 ''');
-      
-      final source = CsvDataSource(file);
-      final headers = await source.getHeaders();
-      expect(headers, ['Name', ' Age', ' ""', ' Name', ' Description']); // Note: csv package strips quotes but leaves space without trim unless configured.
 
-      final rows = await source.getRows().toList();
-      expect(rows.length, 2);
-      expect(rows[0][0], 'John Doe');
-      expect(rows[0][4], 'A person\r\nwith a multiline\r\ndescription');
-      expect(rows[1][0], 'Escaped "quotes"');
-      expect(rows[1][3], ''); // Empty CSV cell represented as empty string
-    });
+        final source = CsvDataSource(file);
+        final headers = await source.getHeaders();
+        expect(
+          headers,
+          ['Name', ' Age', ' ""', ' Name', ' Description'],
+        ); // Note: csv package strips quotes but leaves space without trim unless configured.
+
+        final rows = await source.getRows().toList();
+        expect(rows.length, 2);
+        expect(rows[0][0], 'John Doe');
+        expect(rows[0][4], 'A person\r\nwith a multiline\r\ndescription');
+        expect(rows[1][0], 'Escaped "quotes"');
+        expect(rows[1][3], ''); // Empty CSV cell represented as empty string
+      },
+    );
 
     test('Preview parsing does not prevent import reading', () async {
       final file = createTempCsv('preview.csv', 'A,B\n1,2');
       final source = CsvDataSource(file);
-      
+
       final previewHeaders = await source.getHeaders();
       final previewRows = await source.getRows().take(5).toList();
       expect(previewHeaders, ['A', 'B']);
@@ -177,43 +185,148 @@ description"
       expect(importHeaders, ['A', 'B']);
       expect(importRows.length, 1);
     });
+
+    test('Strips UTF-8 BOM from the first header', () async {
+      final bomBytes = [
+        0xEF,
+        0xBB,
+        0xBF,
+        ...utf8.encode('Title,Author\nBook1,Author1'),
+      ];
+      final file = File('${tempDir.path}/bom.csv');
+      file.writeAsBytesSync(bomBytes);
+
+      final source = CsvDataSource(file);
+      final headers = await source.getHeaders();
+      expect(headers, ['Title', 'Author']);
+      expect(headers[0].startsWith('\uFEFF'), isFalse);
+    });
+
+    test('Safely handles empty CSV file without throwing Bad State', () async {
+      final file = File('${tempDir.path}/empty.csv');
+      file.writeAsStringSync('');
+
+      final source = CsvDataSource(file);
+      final headers = await source.getHeaders();
+      expect(headers, isEmpty);
+
+      final rows = await source.getRows().toList();
+      expect(rows, isEmpty);
+    });
+
+    test(
+      'Safely reads files containing non-UTF8 byte sequences without throwing',
+      () async {
+        // 0xE9 in ISO-8859-1 is 'é', which is invalid alone in UTF-8
+        final rawBytes = [
+          ...utf8.encode('Header1,Header2\nValue1,'),
+          0xE9,
+          0x63,
+          0x6F,
+          0x6C,
+          0x65, // école
+        ];
+        final file = File('${tempDir.path}/malformed_utf8.csv');
+        file.writeAsBytesSync(rawBytes);
+
+        final source = CsvDataSource(file);
+        final headers = await source.getHeaders();
+        expect(headers, ['Header1', 'Header2']);
+
+        final rows = await source.getRows().toList();
+        expect(rows.length, 1);
+        expect(rows.first[0], 'Value1');
+        // The invalid byte is converted using Unicode replacement character
+        expect(rows.first[1].toString(), contains('cole'));
+      },
+    );
+  });
+
+  group('ImportService.normalizeHeaders', () {
+    test('Clamps long headers to 60 characters and deduplicates', () {
+      final longHeader1 = 'A' * 80;
+      final longHeader2 = 'A' * 80;
+      final headers = [longHeader1, longHeader2, '', '   ', 'Normal'];
+
+      final normalized = ImportService.normalizeHeaders(headers);
+
+      expect(normalized[0].length, 60);
+      expect(normalized[0], 'A' * 60);
+      expect(normalized[1], '${'A' * 56} (1)');
+      expect(normalized[2], 'Column A');
+      expect(normalized[3], 'Column B');
+      expect(normalized[4], 'Normal');
+    });
+
+    test('Trims whitespace and handles multiple duplicates', () {
+      final headers = ['  Name  ', 'Name', 'Name', ' Age '];
+      final normalized = ImportService.normalizeHeaders(headers);
+      expect(normalized, ['Name', 'Name (1)', 'Name (2)', 'Age']);
+    });
+
+    test(
+      'Avoids collision when raw headers already contain numbered suffixes',
+      () {
+        final headers = ['Item', 'Item (1)', 'Item'];
+        final normalized = ImportService.normalizeHeaders(headers);
+        expect(normalized, ['Item', 'Item (1)', 'Item (2)']);
+      },
+    );
+
+    test('Guarantees case-insensitive deduplication for field names', () {
+      final headers = ['Age', 'age', 'AGE'];
+      final normalized = ImportService.normalizeHeaders(headers);
+      expect(normalized, ['Age', 'age (1)', 'AGE (2)']);
+    });
   });
 
   group('ImportService', () {
-    test('Imports clean database with normalized headers and text fields', () async {
-      final file = createTempCsv('import.csv', '''
+    test(
+      'Imports clean database with normalized headers and text fields',
+      () async {
+        final file = createTempCsv('import.csv', '''
   Name  , Name, , 
 John, Smith, a, b
 Jane, Doe, c, d
 ,,,,,
 Jane, Doe, c
 ''');
-      
-      final source = CsvDataSource(file);
-      await importService.importDatabase('Test DB', source);
 
-      final databases = await schemaRepo.getAllDatabases();
-      expect(databases.length, 1);
-      final dbDef = databases.first;
-      expect(dbDef.name, 'Test DB');
-      expect(dbDef.fields.length, 4);
-      
-      expect(dbDef.fields[0].name, 'Name');
-      expect(dbDef.fields[1].name, 'Name (1)');
-      expect(dbDef.fields[2].name, 'Column A');
-      expect(dbDef.fields[3].name, 'Column B');
+        final source = CsvDataSource(file);
+        await importService.importDatabase('Test DB', source);
 
-      for (var f in dbDef.fields) {
-        expect(f.type, FieldType.text);
-        expect(f.isRequired, isFalse);
-      }
+        final databases = await schemaRepo.getAllDatabases();
+        expect(databases.length, 1);
+        final dbDef = databases.first;
+        expect(dbDef.name, 'Test DB');
+        expect(dbDef.fields.length, 4);
 
-      final records = await recordRepo.getRecordsForDatabase(dbDef.id);
-      expect(records.length, 3); // 1 blank row skipped, last row missing cell padded
+        expect(dbDef.fields[0].name, 'Name');
+        expect(dbDef.fields[1].name, 'Name (1)');
+        expect(dbDef.fields[2].name, 'Column A');
+        expect(dbDef.fields[3].name, 'Column B');
 
-      expect((records[0].values[dbDef.fields[0].id] as TextFieldValue).value, 'John');
-      expect((records[2].values[dbDef.fields[3].id] as TextFieldValue).value, ''); // Padded missing cell
-    });
+        for (var f in dbDef.fields) {
+          expect(f.type, FieldType.text);
+          expect(f.isRequired, isFalse);
+        }
+
+        final records = await recordRepo.getRecordsForDatabase(dbDef.id);
+        expect(
+          records.length,
+          3,
+        ); // 1 blank row skipped, last row missing cell padded
+
+        expect(
+          (records[0].values[dbDef.fields[0].id] as TextFieldValue).value,
+          'John',
+        );
+        expect(
+          (records[2].values[dbDef.fields[3].id] as TextFieldValue).value,
+          '',
+        ); // Padded missing cell
+      },
+    );
 
     test('Rollback on failure during import', () async {
       final sb = StringBuffer();
@@ -229,13 +342,25 @@ Jane, Doe, c
         () => importService.importDatabase('Fail DB', failingSource),
         throwsA(
           isA<Exception>()
-              .having((e) => e.toString(), 'message', contains('Changes reverted'))
-              .having((e) => e.toString(), 'message', isNot(contains('cleanup failed'))),
+              .having(
+                (e) => e.toString(),
+                'message',
+                contains('Changes reverted'),
+              )
+              .having(
+                (e) => e.toString(),
+                'message',
+                isNot(contains('cleanup failed')),
+              ),
         ),
       );
 
       final databases = await schemaRepo.getAllDatabases();
-      expect(databases, isEmpty, reason: 'Database should have been rolled back and deleted');
+      expect(
+        databases,
+        isEmpty,
+        reason: 'Database should have been rolled back and deleted',
+      );
     });
 
     test('Large import with batching', () async {
@@ -251,10 +376,16 @@ Jane, Doe, c
 
       final databases = await schemaRepo.getAllDatabases();
       expect(databases.length, 1);
-      
-      final records = await recordRepo.getRecordsForDatabase(databases.first.id);
+
+      final records = await recordRepo.getRecordsForDatabase(
+        databases.first.id,
+      );
       expect(records.length, 1200);
-      expect((records[1199].values[databases.first.fields[0].id] as TextFieldValue).value, 'Row1199_1');
+      expect(
+        (records[1199].values[databases.first.fields[0].id] as TextFieldValue)
+            .value,
+        'Row1199_1',
+      );
     });
 
     test('Import preserves exact source row sequence', () async {
@@ -295,22 +426,30 @@ Jane, Doe, c
             position: 0,
             createdAt: DateTime.now(),
             updatedAt: DateTime.now(),
-          )
+          ),
         ],
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
       );
       await schemaRepo.createDatabase(dbDef);
 
-      final records = List.generate(50, (i) => Record(
-        id: 'r$i',
-        databaseId: 'test_db',
-        values: {
-          'f1': TextFieldValue(id: 'v$i', recordId: 'r$i', fieldId: 'f1', value: 'Val$i'),
-        },
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
-      ));
+      final records = List.generate(
+        50,
+        (i) => Record(
+          id: 'r$i',
+          databaseId: 'test_db',
+          values: {
+            'f1': TextFieldValue(
+              id: 'v$i',
+              recordId: 'r$i',
+              fieldId: 'f1',
+              value: 'Val$i',
+            ),
+          },
+          createdAt: DateTime.now(),
+          updatedAt: DateTime.now(),
+        ),
+      );
 
       await recordRepo.saveRecordsBatch(records);
 

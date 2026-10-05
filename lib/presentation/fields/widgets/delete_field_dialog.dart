@@ -1,61 +1,61 @@
 import 'package:flutter/material.dart';
 
 import '../../../domain/models/field_definition.dart';
+import '../../common/widgets/vault_destructive_dialog.dart';
 
 class DeleteFieldDialog extends StatelessWidget {
   final FieldDefinition field;
 
   const DeleteFieldDialog({super.key, required this.field});
 
-  static Future<bool> show(BuildContext context, {required FieldDefinition field}) async {
-    final result = await showDialog<bool>(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => DeleteFieldDialog(field: field),
+  static Future<bool> show(
+    BuildContext context, {
+    required FieldDefinition field,
+  }) async {
+    return VaultDestructiveDialog.show(
+      context,
+      title: 'Delete Field?',
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      content: _buildContent(context, field),
     );
-    return result ?? false;
+  }
+
+  static Widget _buildContent(BuildContext context, FieldDefinition field) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Text.rich(
+      TextSpan(
+        style: theme.textTheme.bodyMedium?.copyWith(
+          color: colorScheme.onSurface,
+          height: 1.45,
+        ),
+        children: [
+          const TextSpan(
+            text: 'Are you absolutely sure you want to delete the ',
+          ),
+          TextSpan(
+            text: field.name,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+          const TextSpan(text: ' field?\n\n'),
+          const TextSpan(
+            text:
+                'This action will permanently erase all data stored in this field across ALL existing records in the database.',
+          ),
+        ],
+      ),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return AlertDialog(
-      icon: Icon(Icons.warning_amber_rounded, color: colorScheme.error, size: 48),
-      title: const Text('Delete Field?'),
-      content: RichText(
-        text: TextSpan(
-          style: theme.textTheme.bodyMedium,
-          children: [
-            const TextSpan(text: 'Are you absolutely sure you want to delete the '),
-            TextSpan(
-              text: field.name,
-              style: const TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const TextSpan(text: ' field?\n\n'),
-            const TextSpan(
-              text: 'This action will instantly and permanently erase all data stored in this field across ALL existing records in the database.\n\n',
-              style: TextStyle(fontWeight: FontWeight.bold),
-            ),
-            const TextSpan(text: 'This action cannot be undone.'),
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(false),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.of(context).pop(true),
-          style: FilledButton.styleFrom(
-            backgroundColor: colorScheme.error,
-            foregroundColor: colorScheme.onError,
-          ),
-          child: const Text('Delete Permanently'),
-        ),
-      ],
+    return VaultDestructiveDialog(
+      title: 'Delete Field?',
+      confirmText: 'Delete Permanently',
+      cancelText: 'Cancel',
+      content: _buildContent(context, field),
     );
   }
 }

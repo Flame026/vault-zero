@@ -12,20 +12,41 @@ class CsvDataSource implements TabularDataSource {
 
   @override
   Future<List<String>> getHeaders() async {
-    final stream = file.openRead();
-    final firstRow = await stream
-        .transform(utf8.decoder)
-        .transform(csv.decoder)
-        .first;
+    if (!await file.exists()) {
+      throw const FormatException('CSV file does not exist.');
+    }
 
-    return firstRow.map((e) => e.toString()).toList();
+    try {
+      final stream = file.openRead();
+      final rows = await stream
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .transform(csv.decoder)
+          .take(1)
+          .toList();
+
+      if (rows.isEmpty || rows.first.isEmpty) {
+        return const [];
+      }
+
+      final firstRow = rows.first;
+      return firstRow.asMap().entries.map((entry) {
+        var header = entry.value?.toString() ?? '';
+        if (entry.key == 0 && header.startsWith('\uFEFF')) {
+          header = header.substring(1);
+        }
+        return header;
+      }).toList();
+    } catch (e) {
+      if (e is FormatException) rethrow;
+      throw FormatException('Failed to read CSV file: $e');
+    }
   }
 
   @override
   Stream<List<dynamic>> getRows() {
     return file
         .openRead()
-        .transform(utf8.decoder)
+        .transform(const Utf8Decoder(allowMalformed: true))
         .transform(csv.decoder)
         .skip(1); // Skip the header row
   }

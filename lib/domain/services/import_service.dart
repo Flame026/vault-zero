@@ -23,54 +23,85 @@ class ImportService {
   /// Normalizes a list of headers.
   /// Trims whitespace, replaces empty headers with "Column A", "Column B", etc.
   /// Deduplicates by appending "(1)", "(2)", etc.
-  List<String> _normalizeHeaders(List<String> rawHeaders) {
+  /// Enforces maximum 60 characters for Vault Zero field name limits.
+  static List<String> normalizeHeaders(List<String> rawHeaders) {
     final normalized = <String>[];
+    final seenLower = <String>{};
     final counts = <String, int>{};
     var emptyCount = 0;
 
-    for (var header in rawHeaders) {
-      header = header.trim();
+    for (var raw in rawHeaders) {
+      var header = raw
+          // Strip BOM and invisible zero-width characters
+          .replaceAll(RegExp(r'[\uFEFF\u200B-\u200D\u2060\uFE0E\uFE0F]'), '')
+          // Strip bidirectional control overrides
+          .replaceAll(RegExp(r'[\u202A-\u202E\u2066-\u2069]'), '')
+          // Strip ASCII control characters
+          .replaceAll(RegExp(r'[\x00-\x1F\x7F]'), '')
+          .trim();
+
       if (header.isEmpty) {
-        final char = String.fromCharCode('A'.codeUnitAt(0) + emptyCount);
-        header = 'Column $char';
+        if (emptyCount < 26) {
+          final char = String.fromCharCode('A'.codeUnitAt(0) + emptyCount);
+          header = 'Column $char';
+        } else {
+          header = 'Column ${emptyCount + 1}';
+        }
         emptyCount++;
       }
 
-      if (counts.containsKey(header)) {
-        final count = counts[header]! + 1;
-        counts[header] = count;
-        normalized.add('$header ($count)');
-      } else {
-        counts[header] = 0;
-        normalized.add(header);
+      if (header.length > 60) {
+        header = header.substring(0, 60);
       }
+
+      var candidate = header;
+      final key = header.toLowerCase();
+      var count = counts[key] ?? 0;
+
+      while (seenLower.contains(candidate.toLowerCase())) {
+        count++;
+        final suffix = ' ($count)';
+        final base = header.length + suffix.length > 60
+            ? header.substring(0, 60 - suffix.length)
+            : header;
+        candidate = '$base$suffix';
+      }
+
+      counts[key] = count;
+      seenLower.add(candidate.toLowerCase());
+      normalized.add(candidate);
     }
     return normalized;
   }
 
   /// Imports a data source into a new Database with the given [databaseName].
-  Future<void> importDatabase(String databaseName, TabularDataSource source) async {
+  Future<void> importDatabase(
+    String databaseName,
+    TabularDataSource source,
+  ) async {
     final rawHeaders = await source.getHeaders();
     if (rawHeaders.isEmpty) {
       throw const FormatException('Data source has no headers or is empty.');
     }
 
-    final headers = _normalizeHeaders(rawHeaders);
+    final headers = normalizeHeaders(rawHeaders);
     final databaseId = _uuid.v4();
     final now = DateTime.now();
 
     final fields = <FieldDefinition>[];
     for (var i = 0; i < headers.length; i++) {
-      fields.add(FieldDefinition(
-        id: _uuid.v4(),
-        databaseId: databaseId,
-        name: headers[i],
-        type: FieldType.text,
-        position: i,
-        isRequired: false,
-        createdAt: now,
-        updatedAt: now,
-      ));
+      fields.add(
+        FieldDefinition(
+          id: _uuid.v4(),
+          databaseId: databaseId,
+          name: headers[i],
+          type: FieldType.text,
+          position: i,
+          isRequired: false,
+          createdAt: now,
+          updatedAt: now,
+        ),
+      );
     }
 
     final databaseDef = DatabaseDefinition(
@@ -94,7 +125,9 @@ class ImportService {
 
       await for (final row in rowsStream) {
         // Skip completely blank rows
-        final isBlank = row.every((cell) => cell == null || cell.toString().trim().isEmpty);
+        final isBlank = row.every(
+          (cell) => cell == null || cell.toString().trim().isEmpty,
+        );
         if (isBlank) {
           continue;
         }
@@ -105,7 +138,7 @@ class ImportService {
         for (var i = 0; i < fields.length; i++) {
           final field = fields[i];
           final String rawValue;
-          
+
           if (i < row.length) {
             rawValue = row[i]?.toString() ?? '';
           } else {
@@ -113,7 +146,9 @@ class ImportService {
           }
 
           // Normalize newlines to LF for generic database consistency
-          final cellValue = rawValue.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+          final cellValue = rawValue
+              .replaceAll('\r\n', '\n')
+              .replaceAll('\r', '\n');
 
           values[field.id] = TextFieldValue(
             id: _uuid.v4(),
@@ -124,13 +159,15 @@ class ImportService {
         }
 
         final recordCreatedAt = now.add(Duration(milliseconds: rowIndex++));
-        batch.add(Record(
-          id: recordId,
-          databaseId: databaseId,
-          values: values,
-          createdAt: recordCreatedAt,
-          updatedAt: recordCreatedAt,
-        ));
+        batch.add(
+          Record(
+            id: recordId,
+            databaseId: databaseId,
+            values: values,
+            createdAt: recordCreatedAt,
+            updatedAt: recordCreatedAt,
+          ),
+        );
 
         if (batch.length >= batchSize) {
           await recordRepository.saveRecordsBatch(batch);

@@ -6,10 +6,7 @@ class RecordCursor {
   final DateTime createdAt;
   final String id;
 
-  const RecordCursor({
-    required this.createdAt,
-    required this.id,
-  });
+  const RecordCursor({required this.createdAt, required this.id});
 
   @override
   bool operator ==(Object other) =>

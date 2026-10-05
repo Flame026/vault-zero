@@ -32,29 +32,89 @@ abstract class FieldValue {
   }
 
   static FieldValue fromJson(Map<String, dynamic> json) {
-    final type = FieldType.values.firstWhere((e) => e.name == json['type']);
-    final id = json['id'] as String;
-    final recordId = json['recordId'] as String;
-    final fieldId = json['fieldId'] as String;
+    final typeName = json['type'] as String?;
+    final type = FieldType.values.where((e) => e.name == typeName).firstOrNull;
+    if (type == null) {
+      throw FormatException('Unknown field value type: $typeName');
+    }
+    final id = json['id'];
+    final recordId = json['recordId'];
+    final fieldId = json['fieldId'];
+    if (id is! String || recordId is! String || fieldId is! String) {
+      throw const FormatException(
+        'FieldValue is missing required string identifiers.',
+      );
+    }
     final rawValue = json['value'];
 
-    switch (type) {
-      case FieldType.text:
-        return TextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: rawValue as String);
-      case FieldType.longText:
-        return LongTextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: rawValue as String);
-      case FieldType.integer:
-        return IntegerFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: rawValue as int);
-      case FieldType.decimal:
-        return DecimalFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (rawValue as num).toDouble());
-      case FieldType.boolean:
-        return BooleanFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: rawValue as bool);
-      case FieldType.date:
-        return DateFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.parse(rawValue as String));
-      case FieldType.dateTime:
-        return DateTimeFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.parse(rawValue as String));
-      case FieldType.choice:
-        return ChoiceFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: rawValue as String);
+    try {
+      switch (type) {
+        case FieldType.text:
+          return TextFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: (rawValue as String?) ?? '',
+          );
+        case FieldType.longText:
+          return LongTextFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: (rawValue as String?) ?? '',
+          );
+        case FieldType.integer:
+          return IntegerFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: (rawValue as num).toInt(),
+          );
+        case FieldType.decimal:
+          final d = (rawValue as num).toDouble();
+          if (!d.isFinite) {
+            throw const FormatException('Decimal value must be finite.');
+          }
+          return DecimalFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: d,
+          );
+        case FieldType.boolean:
+          return BooleanFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: rawValue as bool,
+          );
+        case FieldType.date:
+          return DateFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: DateTime.parse(rawValue as String),
+          );
+        case FieldType.dateTime:
+          return DateTimeFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: DateTime.parse(rawValue as String),
+          );
+        case FieldType.choice:
+          return ChoiceFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: (rawValue as String?) ?? '',
+          );
+      }
+    } catch (e) {
+      if (e is FormatException) rethrow;
+      throw FormatException(
+        'Invalid value "$rawValue" for field type ${type.name}: $e',
+      );
     }
   }
 }
@@ -113,7 +173,10 @@ class DecimalFieldValue extends FieldValue {
     required super.recordId,
     required super.fieldId,
     required this.value,
-  });
+  }) : assert(
+         value >= -1.7976931348623157e+308 && value <= 1.7976931348623157e+308,
+         'Decimal value must be finite',
+       );
 
   @override
   FieldType get fieldType => FieldType.decimal;

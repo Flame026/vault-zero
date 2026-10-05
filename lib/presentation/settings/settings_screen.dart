@@ -8,8 +8,15 @@ import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../core/providers.dart';
+import '../../core/theme/design_tokens.dart';
 import '../../core/theme/theme_provider.dart';
 import '../../domain/models/vault_backup.dart';
+import '../common/widgets/vault_app_bar.dart';
+import '../common/widgets/vault_card.dart';
+import '../common/widgets/vault_icon_badge.dart';
+import '../common/widgets/vault_section_header.dart';
+import '../common/widgets/vault_snackbar.dart';
+import '../common/error_sanitizer.dart';
 import '../databases/controllers/database_list_controller.dart';
 import '../import/csv_preview_screen.dart';
 import '../import/excel_preview_screen.dart';
@@ -27,6 +34,7 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   int _selectedCategory = 0; // 0: Appearance, 1: Data Management
 
   Future<void> _handleBackup() async {
+    if (_isLoading) return;
     setState(() => _isLoading = true);
     try {
       final service = await ref.read(backupRestoreServiceProvider.future);
@@ -40,11 +48,14 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
         name: filename,
         mimeType: 'application/json',
       );
-      await SharePlus.instance.share(ShareParams(files: [file], text: 'Vault Zero Backup'));
+      await SharePlus.instance.share(
+        ShareParams(files: [file], text: 'Vault Zero Backup'),
+      );
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Backup failed: $e')),
+        VaultSnackbar.showError(
+          context,
+          'Backup failed: ${sanitizeErrorMessage(e)}',
         );
       }
     } finally {
@@ -53,26 +64,38 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _handleRestore() async {
+    if (_isLoading) return;
     FilePickerResult? result;
     try {
-      result = await FilePicker.pickFiles(
-        type: FileType.any,
-      );
-    } catch (e) {
+      result = await FilePicker.pickFiles(type: FileType.any);
+    } catch (_) {
       // Ignored
     }
 
     if (result != null && result.files.single.path != null) {
       final file = File(result.files.single.path!);
-      final content = await file.readAsString();
+      final String content;
+      try {
+        content = await file.readAsString();
+      } catch (e) {
+        if (!mounted) return;
+        VaultSnackbar.showError(
+          context,
+          'Could not read backup file: ${sanitizeErrorMessage(e)}',
+        );
+        return;
+      }
 
       VaultBackup? backup;
       try {
-        backup = VaultBackup.fromJson(jsonDecode(content) as Map<String, dynamic>);
+        backup = VaultBackup.fromJson(
+          jsonDecode(content) as Map<String, dynamic>,
+        );
       } catch (e) {
         if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Invalid backup file: $e')),
+        VaultSnackbar.showError(
+          context,
+          'Invalid backup file: ${sanitizeErrorMessage(e)}',
         );
         return;
       }
@@ -81,43 +104,129 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
 
       final confirmed = await showDialog<bool>(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Restore Vault?'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Backup Created On: ${DateFormat.yMMMd().format(backup!.exportDate)}'),
-              Text('Databases: ${backup.databases.length}'),
-              Text('Records: ${backup.records.length}'),
-              const SizedBox(height: 16),
-              Text(
-                'WARNING: Restoring will permanently replace your current Vault. This action cannot be undone.',
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.error,
+        builder: (context) {
+          final theme = Theme.of(context);
+          final colorScheme = theme.colorScheme;
+          return AlertDialog(
+            backgroundColor: colorScheme.surfaceContainerLow,
+            scrollable: true,
+            shape: RoundedRectangleBorder(borderRadius: AppRadius.radiusDialog),
+            icon: Icon(
+              Icons.warning_amber_rounded,
+              size: 32,
+              color: colorScheme.error,
+            ),
+            title: const Text('Restore Vault?'),
+            content: ConstrainedBox(
+              constraints: const BoxConstraints(
+                maxWidth: AppConstraints.maxDialogWidth,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: colorScheme.surfaceContainerHighest.withValues(
+                        alpha: 0.5,
+                      ),
+                      borderRadius: AppRadius.radiusMd,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.calendar_today_rounded,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                'Backup Date: ${DateFormat.yMMMd().format(backup!.exportDate)}',
+                                style: theme.textTheme.bodyMedium?.copyWith(
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.xs),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.storage_rounded,
+                              size: 16,
+                              color: colorScheme.primary,
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Text(
+                                '${backup.databases.length} Databases, ${backup.records.length} Records',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: colorScheme.errorContainer.withValues(alpha: 0.5),
+                      borderRadius: AppRadius.radiusMd,
+                      border: Border.all(
+                        color: colorScheme.error.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.info_outline_rounded,
+                          color: colorScheme.error,
+                          size: 20,
+                        ),
+                        const SizedBox(width: AppSpacing.sm),
+                        Expanded(
+                          child: Text(
+                            'Restoring will permanently replace your current Vault. This action cannot be undone.',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onErrorContainer,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                style: FilledButton.styleFrom(
+                  foregroundColor: colorScheme.onError,
+                  backgroundColor: colorScheme.error,
                 ),
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Restore Vault'),
               ),
             ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text('Cancel'),
-            ),
-            FilledButton.tonal(
-              style: FilledButton.styleFrom(
-                foregroundColor: Theme.of(context).colorScheme.onError,
-                backgroundColor: Theme.of(context).colorScheme.error,
-              ),
-              onPressed: () => Navigator.of(context).pop(true),
-              child: const Text('Restore'),
-            ),
-          ],
-        ),
+          );
+        },
       );
 
       if (confirmed == true) {
+        if (!mounted) return;
         setState(() => _isLoading = true);
         try {
           final service = await ref.read(backupRestoreServiceProvider.future);
@@ -129,14 +238,13 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ref.invalidate(databaseListControllerProvider);
 
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Vault restored successfully.')),
-            );
+            VaultSnackbar.showSuccess(context, 'Vault restored successfully.');
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Restore failed: $e')),
+            VaultSnackbar.showError(
+              context,
+              'Restore failed: ${sanitizeErrorMessage(e)}',
             );
           }
         } finally {
@@ -147,206 +255,350 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   }
 
   Future<void> _handleImportCsv() async {
-    FilePickerResult? result;
+    if (_isLoading) return;
     try {
-      result = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['csv'],
       );
-    } catch (e) {
-      // Ignored
-    }
-    if (result != null && result.files.single.path != null && mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => CsvPreviewScreen(
-            filePath: result!.files.single.path!,
+      if (result != null && result.files.single.path != null && mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) =>
+                CsvPreviewScreen(filePath: result.files.single.path!),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        VaultSnackbar.showError(
+          context,
+          'Could not select CSV file: ${sanitizeErrorMessage(e)}',
+        );
+      }
     }
   }
 
   Future<void> _handleImportExcel() async {
-    FilePickerResult? result;
+    if (_isLoading) return;
     try {
-      result = await FilePicker.pickFiles(
+      final result = await FilePicker.pickFiles(
         type: FileType.custom,
         allowedExtensions: ['xlsx'],
       );
-    } catch (e) {
-      // Ignored
-    }
-    if (result != null && result.files.single.path != null && mounted) {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => ExcelPreviewScreen(
-            filePath: result!.files.single.path!,
+      if (result != null && result.files.single.path != null && mounted) {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) =>
+                ExcelPreviewScreen(filePath: result.files.single.path!),
           ),
-        ),
-      );
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        VaultSnackbar.showError(
+          context,
+          'Could not select Excel file: ${sanitizeErrorMessage(e)}',
+        );
+      }
     }
   }
 
   Widget _buildSectionHeader(String title) {
-    final theme = Theme.of(context);
-    final colorScheme = theme.colorScheme;
-
-    return Padding(
-      padding: const EdgeInsets.only(left: 4, right: 4, bottom: 8, top: 8),
-      child: Text(
-        title.toUpperCase(),
-        style: theme.textTheme.labelLarge?.copyWith(
-          color: colorScheme.primary,
-          fontWeight: FontWeight.bold,
-          letterSpacing: 1.1,
-        ),
-      ),
-    );
+    return VaultSectionHeader(title: title);
   }
 
   Widget _buildIconContainer(IconData icon) {
-    final colorScheme = Theme.of(context).colorScheme;
-
-    return Container(
-      padding: const EdgeInsets.all(8),
-      decoration: BoxDecoration(
-        color: colorScheme.primaryContainer,
-        borderRadius: BorderRadius.circular(10),
-      ),
-      child: Icon(
-        icon,
-        size: 20,
-        color: colorScheme.onPrimaryContainer,
-      ),
-    );
+    return VaultIconBadge(icon: icon);
   }
 
   Widget _buildAppearanceGroup() {
     final themeState = ref.watch(themeProvider);
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return VaultCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
             leading: _buildIconContainer(Icons.palette_rounded),
-            title: const Text('Theme Color', style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: Text(themeState.preset.label),
+            title: const Text(
+              'Theme Color',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(
+              '${themeState.preset.label} — ${themeState.preset.description}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
             trailing: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
                 Container(
-                  width: 20,
-                  height: 20,
+                  width: 22,
+                  height: 22,
                   decoration: BoxDecoration(
                     color: themeState.preset.seedColor,
                     shape: BoxShape.circle,
                     border: Border.all(
-                      color: Colors.white.withValues(alpha: 0.3),
+                      color: colorScheme.outlineVariant.withValues(alpha: 0.6),
                       width: 1.5,
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+                const SizedBox(width: AppSpacing.sm),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: colorScheme.onSurfaceVariant,
+                ),
               ],
             ),
             onTap: () => ThemePickerSheet.show(context),
           ),
           Divider(
             height: 1,
-            indent: 56,
-            endIndent: 16,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            indent: 64,
+            endIndent: AppSpacing.lg,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.25),
           ),
-          SwitchListTile(
-            secondary: _buildIconContainer(Icons.dark_mode_rounded),
-            title: const Text('Dark Mode', style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text('Toggle dark/light appearance'),
-            value: themeState.mode == ThemeMode.dark,
-            onChanged: (value) {
-              ref.read(themeProvider.notifier).changeMode(
-                    value ? ThemeMode.dark : ThemeMode.light,
-                  );
-            },
+          ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
+            leading: _buildIconContainer(
+              themeState.mode == ThemeMode.dark
+                  ? Icons.dark_mode_rounded
+                  : (themeState.mode == ThemeMode.light
+                        ? Icons.light_mode_rounded
+                        : Icons.brightness_auto_rounded),
+            ),
+            title: const Text(
+              'Theme Mode',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: Text(switch (themeState.mode) {
+              ThemeMode.system => 'System (Follows device setting)',
+              ThemeMode.light => 'Light appearance',
+              ThemeMode.dark => 'Dark appearance',
+            }),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              0,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
+            child: SizedBox(
+              width: double.infinity,
+              child: SegmentedButton<ThemeMode>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(
+                    value: ThemeMode.system,
+                    icon: Icon(Icons.brightness_auto_rounded),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('System'),
+                    ),
+                    tooltip: 'Match device system appearance',
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.light,
+                    icon: Icon(Icons.light_mode_rounded),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Light'),
+                    ),
+                    tooltip: 'Always use light theme',
+                  ),
+                  ButtonSegment(
+                    value: ThemeMode.dark,
+                    icon: Icon(Icons.dark_mode_rounded),
+                    label: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: Text('Dark'),
+                    ),
+                    tooltip: 'Always use dark theme',
+                  ),
+                ],
+                selected: {themeState.mode},
+                onSelectionChanged: (selected) {
+                  ref.read(themeProvider.notifier).changeMode(selected.first);
+                },
+              ),
+            ),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildDataGroup() {
+  Widget _buildDataBackupGroup() {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Card(
-      elevation: 0,
-      color: colorScheme.surfaceContainerLow,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-        ),
-      ),
-      clipBehavior: Clip.antiAlias,
+    return VaultCard(
+      padding: EdgeInsets.zero,
       child: Column(
         children: [
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
             leading: _buildIconContainer(Icons.backup_rounded),
-            title: const Text('Backup Vault', style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text(
+              'Backup Vault',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: const Text('Export a copy of your vault data'),
-            trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
             onTap: _handleBackup,
           ),
           Divider(
             height: 1,
-            indent: 56,
-            endIndent: 16,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            indent: 64,
+            endIndent: AppSpacing.lg,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.25),
           ),
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
             leading: _buildIconContainer(Icons.restore_rounded),
-            title: const Text('Restore Vault', style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text(
+              'Restore Vault',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: const Text('Replace current data with a backup'),
-            trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
             onTap: _handleRestore,
           ),
-          Divider(
-            height: 1,
-            indent: 56,
-            endIndent: 16,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildImportDataGroup() {
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return VaultCard(
+      padding: EdgeInsets.zero,
+      child: Column(
+        children: [
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
             leading: _buildIconContainer(Icons.table_view_rounded),
-            title: const Text('Import CSV', style: TextStyle(fontWeight: FontWeight.w600)),
+            title: const Text(
+              'Import CSV',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
             subtitle: const Text('Import a CSV file into a new database'),
-            trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
             onTap: _handleImportCsv,
           ),
           Divider(
             height: 1,
-            indent: 56,
-            endIndent: 16,
-            color: colorScheme.outlineVariant.withValues(alpha: 0.3),
+            indent: 64,
+            endIndent: AppSpacing.lg,
+            color: colorScheme.outlineVariant.withValues(alpha: 0.25),
           ),
           ListTile(
+            contentPadding: const EdgeInsets.symmetric(
+              horizontal: AppSpacing.lg,
+              vertical: AppSpacing.xs,
+            ),
             leading: _buildIconContainer(Icons.description_rounded),
-            title: const Text('Import Excel', style: TextStyle(fontWeight: FontWeight.w600)),
-            subtitle: const Text('Import an Excel (.xlsx) file into a new database'),
-            trailing: Icon(Icons.chevron_right_rounded, color: colorScheme.onSurfaceVariant),
+            title: const Text(
+              'Import Excel',
+              style: TextStyle(fontWeight: FontWeight.w600),
+            ),
+            subtitle: const Text(
+              'Import an Excel (.xlsx) file into a new database',
+            ),
+            trailing: Icon(
+              Icons.chevron_right_rounded,
+              color: colorScheme.onSurfaceVariant,
+            ),
             onTap: _handleImportExcel,
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildAboutFooter(BuildContext context) {
+    final theme = Theme.of(context);
+    final colorScheme = theme.colorScheme;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpacing.xxl),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: colorScheme.surfaceContainerHighest.withValues(
+                  alpha: 0.5,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.shield_outlined,
+                size: 24,
+                color: colorScheme.primary,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Text(
+              'Vault Zero',
+              style: theme.textTheme.titleSmall?.copyWith(
+                fontWeight: FontWeight.w600,
+                color: colorScheme.onSurface,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xxs),
+            Text(
+              'Version 1.0.0 • Offline & Private',
+              style: theme.textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: AppSpacing.xs),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Text(
+                '100% offline local SQLite storage. Zero telemetry, zero cloud services. Your data never leaves your device.',
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant.withValues(alpha: 0.75),
+                  fontSize: 11,
+                ),
+                textAlign: TextAlign.center,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -355,149 +607,213 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Settings'),
-      ),
-      body: Stack(
-        children: [
-          LayoutBuilder(
-            builder: (context, constraints) {
-              final width = constraints.maxWidth;
+    return PopScope(
+      canPop: !_isLoading,
+      child: Scaffold(
+        appBar: const VaultAppBar(
+          title: 'Settings',
+          subtitle: 'Appearance & Data Management',
+        ),
+        body: Stack(
+          children: [
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final width = constraints.maxWidth;
 
-              // Breakpoint >= 900: Two-pane master-detail layout
-              if (width >= 900) {
-                return Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Left navigation master pane (~320px)
-                    SizedBox(
-                      width: 320,
-                      child: ListView(
-                        padding: const EdgeInsets.all(24),
-                        children: [
-                          _buildSectionHeader('Categories'),
-                          Card(
-                            elevation: 0,
-                            color: colorScheme.surfaceContainerLow,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
+                // Breakpoint >= 900: Two-pane master-detail layout
+                if (width >= 900) {
+                  return Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left navigation master pane (~320px)
+                      SizedBox(
+                        width: 320,
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpacing.xxl),
+                          children: [
+                            _buildSectionHeader('Categories'),
+                            VaultCard(
+                              padding: EdgeInsets.zero,
+                              child: Column(
+                                children: [
+                                  ListTile(
+                                    selected: _selectedCategory == 0,
+                                    selectedTileColor: colorScheme
+                                        .primaryContainer
+                                        .withValues(alpha: 0.35),
+                                    leading: _buildIconContainer(
+                                      Icons.palette_rounded,
+                                    ),
+                                    title: const Text(
+                                      'Appearance',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'Theme & Appearance Mode',
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: _selectedCategory == 0
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                    ),
+                                    onTap: () =>
+                                        setState(() => _selectedCategory = 0),
+                                  ),
+                                  Divider(
+                                    height: 1,
+                                    indent: 64,
+                                    endIndent: AppSpacing.lg,
+                                    color: colorScheme.outlineVariant
+                                        .withValues(alpha: 0.25),
+                                  ),
+                                  ListTile(
+                                    selected: _selectedCategory == 1,
+                                    selectedTileColor: colorScheme
+                                        .primaryContainer
+                                        .withValues(alpha: 0.35),
+                                    leading: _buildIconContainer(
+                                      Icons.storage_rounded,
+                                    ),
+                                    title: const Text(
+                                      'Data Management',
+                                      style: TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    subtitle: const Text(
+                                      'Backup, Restore & Import',
+                                    ),
+                                    trailing: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: _selectedCategory == 1
+                                          ? colorScheme.primary
+                                          : colorScheme.onSurfaceVariant,
+                                    ),
+                                    onTap: () =>
+                                        setState(() => _selectedCategory = 1),
+                                  ),
+                                ],
                               ),
                             ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              children: [
-                                ListTile(
-                                  selected: _selectedCategory == 0,
-                                  selectedTileColor: colorScheme.primaryContainer.withValues(alpha: 0.35),
-                                  leading: _buildIconContainer(Icons.palette_rounded),
-                                  title: const Text('Appearance', style: TextStyle(fontWeight: FontWeight.w600)),
-                                  subtitle: const Text('Theme & Dark Mode'),
-                                  trailing: Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: _selectedCategory == 0
-                                        ? colorScheme.primary
-                                        : colorScheme.onSurfaceVariant,
-                                  ),
-                                  onTap: () => setState(() => _selectedCategory = 0),
-                                ),
-                                Divider(
-                                  height: 1,
-                                  indent: 56,
-                                  endIndent: 16,
-                                  color: colorScheme.outlineVariant.withValues(alpha: 0.3),
-                                ),
-                                ListTile(
-                                  selected: _selectedCategory == 1,
-                                  selectedTileColor: colorScheme.primaryContainer.withValues(alpha: 0.35),
-                                  leading: _buildIconContainer(Icons.storage_rounded),
-                                  title: const Text('Data Management', style: TextStyle(fontWeight: FontWeight.w600)),
-                                  subtitle: const Text('Backup, Restore & Import'),
-                                  trailing: Icon(
-                                    Icons.chevron_right_rounded,
-                                    color: _selectedCategory == 1
-                                        ? colorScheme.primary
-                                        : colorScheme.onSurfaceVariant,
-                                  ),
-                                  onTap: () => setState(() => _selectedCategory = 1),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    VerticalDivider(
-                      width: 1,
-                      thickness: 1,
-                      color: colorScheme.outlineVariant.withValues(alpha: 0.4),
-                    ),
-                    // Right content pane
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.all(24),
-                        children: [
-                          if (_selectedCategory == 0) ...[
-                            _buildSectionHeader('Appearance'),
-                            _buildAppearanceGroup(),
-                          ] else ...[
-                            _buildSectionHeader('Data Management'),
-                            _buildDataGroup(),
                           ],
+                        ),
+                      ),
+                      VerticalDivider(
+                        width: 1,
+                        thickness: 1,
+                        color: colorScheme.outlineVariant.withValues(
+                          alpha: 0.4,
+                        ),
+                      ),
+                      // Right content pane
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpacing.xxl),
+                          children: [
+                            if (_selectedCategory == 0) ...[
+                              _buildSectionHeader('Appearance'),
+                              _buildAppearanceGroup(),
+                            ] else ...[
+                              _buildSectionHeader('Data Safety & Backup'),
+                              _buildDataBackupGroup(),
+                              const SizedBox(height: AppSpacing.xl),
+                              _buildSectionHeader('Import Data'),
+                              _buildImportDataGroup(),
+                            ],
+                            const SizedBox(height: AppSpacing.lg),
+                            _buildAboutFooter(context),
+                          ],
+                        ),
+                      ),
+                    ],
+                  );
+                }
+
+                // Breakpoint 720-899: Centered constrained single-column layout
+                if (width >= 720) {
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 640),
+                      child: ListView(
+                        padding: const EdgeInsets.all(AppSpacing.xxl),
+                        children: [
+                          _buildSectionHeader('Appearance'),
+                          _buildAppearanceGroup(),
+                          const SizedBox(height: AppSpacing.xl),
+                          _buildSectionHeader('Data Safety & Backup'),
+                          _buildDataBackupGroup(),
+                          const SizedBox(height: AppSpacing.xl),
+                          _buildSectionHeader('Import Data'),
+                          _buildImportDataGroup(),
+                          _buildAboutFooter(context),
                         ],
                       ),
                     ),
+                  );
+                }
+
+                // Breakpoint < 720: Single-column grouped settings (phone)
+                return ListView(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: AppSpacing.lg,
+                    vertical: AppSpacing.lg,
+                  ),
+                  children: [
+                    _buildSectionHeader('Appearance'),
+                    _buildAppearanceGroup(),
+                    const SizedBox(height: AppSpacing.xl),
+                    _buildSectionHeader('Data Safety & Backup'),
+                    _buildDataBackupGroup(),
+                    const SizedBox(height: AppSpacing.xl),
+                    _buildSectionHeader('Import Data'),
+                    _buildImportDataGroup(),
+                    _buildAboutFooter(context),
                   ],
                 );
-              }
-
-              // Breakpoint 720-899: Centered constrained single-column layout
-              if (width >= 720) {
-                return Center(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 640),
-                    child: ListView(
-                      padding: const EdgeInsets.all(24),
-                      children: [
-                        _buildSectionHeader('Appearance'),
-                        _buildAppearanceGroup(),
-                        const SizedBox(height: 24),
-                        _buildSectionHeader('Data Management'),
-                        _buildDataGroup(),
-                      ],
+              },
+            ),
+            if (_isLoading)
+              Positioned.fill(
+                child: Container(
+                  color: Colors.black54,
+                  child: Center(
+                    child: Card(
+                      elevation: 6,
+                      color: Theme.of(context).colorScheme.surfaceContainerLow,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: AppRadius.radiusDialog,
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.xxxl,
+                          vertical: AppSpacing.xxl,
+                        ),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const SizedBox(
+                              width: 32,
+                              height: 32,
+                              child: CircularProgressIndicator(strokeWidth: 3),
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            Text(
+                              'Processing...',
+                              style: Theme.of(context).textTheme.bodyMedium
+                                  ?.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
-                  ),
-                );
-              }
-
-              // Breakpoint < 720: Single-column grouped settings (phone)
-              return ListView(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                children: [
-                  _buildSectionHeader('Appearance'),
-                  _buildAppearanceGroup(),
-                  const SizedBox(height: 20),
-                  _buildSectionHeader('Data Management'),
-                  _buildDataGroup(),
-                ],
-              );
-            },
-          ),
-          if (_isLoading)
-            Container(
-              color: Colors.black45,
-              child: const Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(24.0),
-                    child: CircularProgressIndicator(),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }

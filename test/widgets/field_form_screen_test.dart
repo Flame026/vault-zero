@@ -16,7 +16,7 @@ void main() {
 
   setUpAll(() {
     sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
+    databaseFactory = databaseFactoryFfiNoIsolate;
   });
 
   setUp(() async {
@@ -72,19 +72,16 @@ void main() {
 
   Widget buildTestWidget({FieldDefinition? initialField}) {
     return ProviderScope(
-      overrides: [
-        databaseProvider.overrideWith((ref) => db),
-      ],
+      overrides: [databaseProvider.overrideWith((ref) => db)],
       child: MaterialApp(
-        home: FieldFormScreen(
-          databaseId: testDbId,
-          initialField: initialField,
-        ),
+        home: FieldFormScreen(databaseId: testDbId, initialField: initialField),
       ),
     );
   }
 
-  testWidgets('FieldFormScreen renders creation mode with 3 field types', (tester) async {
+  testWidgets('FieldFormScreen renders creation mode with 3 field types', (
+    tester,
+  ) async {
     await tester.pumpWidget(buildTestWidget());
     await tester.pumpAndSettle();
 
@@ -101,54 +98,63 @@ void main() {
     expect(find.text('Choice Options'), findsNothing);
   });
 
-  testWidgets('Selecting Choice reveals options manager, allows adding and deleting options', (tester) async {
-    await tester.pumpWidget(buildTestWidget());
-    await tester.pumpAndSettle();
+  testWidgets(
+    'Selecting Choice reveals options manager, allows adding and deleting options',
+    (tester) async {
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
 
-    // Tap Choice segment
-    await tester.tap(find.text('Choice'));
-    await tester.pumpAndSettle();
+      // Tap Choice segment
+      await tester.tap(find.text('Choice'));
+      await tester.pumpAndSettle();
 
-    // Choice options section is now visible
-    expect(find.text('Choice Options'), findsOneWidget);
-    expect(find.text('No options added yet. Add at least one option above.'), findsOneWidget);
+      // Choice options section is now visible
+      expect(find.text('Choice Options'), findsOneWidget);
+      expect(
+        find.text('No options added yet. Add at least one option above.'),
+        findsOneWidget,
+      );
 
-    // Add option 1
-    final optionField = find.widgetWithText(TextField, 'New Option');
-    expect(optionField, findsOneWidget);
-    await tester.enterText(optionField, 'High Priority');
-    await tester.tap(find.byTooltip('Add Option'));
-    await tester.pumpAndSettle();
+      // Add option 1
+      final optionField = find.widgetWithText(TextField, 'New Option');
+      expect(optionField, findsOneWidget);
+      await tester.enterText(optionField, 'High Priority');
+      await tester.tap(find.byTooltip('Add Option'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('High Priority'), findsOneWidget);
-    expect(find.text('No options added yet. Add at least one option above.'), findsNothing);
+      expect(find.text('High Priority'), findsOneWidget);
+      expect(
+        find.text('No options added yet. Add at least one option above.'),
+        findsNothing,
+      );
 
-    // Add option 2
-    await tester.enterText(optionField, 'Low Priority');
-    await tester.tap(find.byTooltip('Add Option'));
-    await tester.pumpAndSettle();
+      // Add option 2
+      await tester.enterText(optionField, 'Low Priority');
+      await tester.tap(find.byTooltip('Add Option'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Low Priority'), findsOneWidget);
+      expect(find.text('Low Priority'), findsOneWidget);
 
-    // Prevent duplicate option
-    await tester.enterText(optionField, 'high priority');
-    await tester.tap(find.byTooltip('Add Option'));
-    await tester.pumpAndSettle();
+      // Prevent duplicate option
+      await tester.enterText(optionField, 'high priority');
+      await tester.tap(find.byTooltip('Add Option'));
+      await tester.pumpAndSettle();
 
-    expect(find.text('Option already added'), findsOneWidget);
+      expect(find.text('Option already added'), findsOneWidget);
 
-    // Delete first option
-    final deleteChipIcon = find.descendant(
-      of: find.widgetWithText(InputChip, 'High Priority'),
-      matching: find.byIcon(Icons.cancel),
-    );
-    expect(deleteChipIcon, findsOneWidget);
-    await tester.tap(deleteChipIcon);
-    await tester.pumpAndSettle();
+      // Delete first option
+      final deleteChipIcon = find.descendant(
+        of: find.widgetWithText(InputChip, 'High Priority'),
+        matching: find.byIcon(Icons.clear),
+      );
+      expect(deleteChipIcon, findsOneWidget);
+      await tester.tap(deleteChipIcon);
+      await tester.pumpAndSettle();
 
-    expect(find.text('High Priority'), findsNothing);
-    expect(find.text('Low Priority'), findsOneWidget);
-  });
+      expect(find.text('High Priority'), findsNothing);
+      expect(find.text('Low Priority'), findsOneWidget);
+    },
+  );
 
   testWidgets('FieldFormScreen in edit mode locks field type', (tester) async {
     final existingField = FieldDefinition(
@@ -168,7 +174,10 @@ void main() {
 
     expect(find.text('Edit Field'), findsOneWidget);
     expect(find.text('Status'), findsOneWidget);
-    expect(find.text('Field type cannot be changed after creation'), findsOneWidget);
+    expect(
+      find.text('Field type cannot be changed after creation'),
+      findsOneWidget,
+    );
     expect(find.byIcon(Icons.lock_outline_rounded), findsOneWidget);
 
     // SegmentedButton is not displayed in edit mode
@@ -177,5 +186,70 @@ void main() {
     // Choice options are still editable
     expect(find.text('Open'), findsOneWidget);
     expect(find.text('Closed'), findsOneWidget);
+    expect(find.text('2 options'), findsOneWidget);
+  });
+
+  testWidgets(
+    'FieldFormScreen updates option count badge and supports clearing inputs',
+    (tester) async {
+      await tester.pumpWidget(buildTestWidget());
+      await tester.pumpAndSettle();
+
+      // Switch to Choice
+      await tester.tap(find.text('Choice'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('0 options'), findsOneWidget);
+
+      final optionField = find.widgetWithText(TextField, 'New Option');
+      await tester.enterText(optionField, 'Draft');
+      await tester.pumpAndSettle();
+
+      // Clear button appears
+      expect(find.byTooltip('Clear option text'), findsOneWidget);
+      await tester.tap(find.byTooltip('Clear option text'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('Draft'), findsNothing);
+      expect(find.byTooltip('Clear option text'), findsNothing);
+
+      // Enter option and add
+      await tester.enterText(optionField, 'Published');
+      await tester.tap(find.byTooltip('Add Option'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('1 option'), findsOneWidget);
+    },
+  );
+
+  testWidgets('FieldFormScreen warns before discarding unsaved changes', (
+    tester,
+  ) async {
+    await tester.pumpWidget(buildTestWidget());
+    await tester.pumpAndSettle();
+
+    // Enter text into Field Name
+    await tester.enterText(
+      find.widgetWithText(TextFormField, 'Field Name'),
+      'Priority',
+    );
+    await tester.pumpAndSettle();
+
+    // Tap Cancel in AppBar
+    await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
+    await tester.pumpAndSettle();
+
+    // Confirmation dialog should appear
+    expect(find.text('Discard changes?'), findsOneWidget);
+    expect(find.text('Keep Editing'), findsOneWidget);
+    expect(find.text('Discard'), findsOneWidget);
+
+    // Tap Keep Editing
+    await tester.tap(find.text('Keep Editing'));
+    await tester.pumpAndSettle();
+
+    // Still on form with input intact
+    expect(find.text('Discard changes?'), findsNothing);
+    expect(find.text('Priority'), findsOneWidget);
   });
 }

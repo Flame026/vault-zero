@@ -16,18 +16,42 @@ class ExcelDataSource implements TabularDataSource {
       return _cachedExcel!;
     }
 
-    final bytes = await file.readAsBytes();
+    if (!await file.exists()) {
+      throw const FormatException('Excel file does not exist.');
+    }
+
+    final List<int> bytes;
+    try {
+      bytes = await file.readAsBytes();
+    } catch (e) {
+      throw FormatException('Could not read Excel file: $e');
+    }
+
     if (bytes.isEmpty) {
       throw const FormatException('Excel file is empty.');
     }
 
-    final excel = Excel.decodeBytes(bytes);
+    final Excel excel;
+    try {
+      excel = Excel.decodeBytes(bytes);
+    } catch (e) {
+      if (e is FormatException) rethrow;
+      throw const FormatException(
+        'Failed to parse Excel file. The file may be corrupt or not a valid Excel workbook.',
+      );
+    }
+
     if (excel.tables.isEmpty) {
       throw const FormatException('Workbook contains no sheets.');
     }
 
     _cachedExcel = excel;
     return excel;
+  }
+
+  /// Clears the cached decoded workbook from memory to free heap resources.
+  void clearCache() {
+    _cachedExcel = null;
   }
 
   /// Decodes and returns all available sheet names in the workbook.
@@ -45,7 +69,9 @@ class ExcelDataSource implements TabularDataSource {
     final targetSheetName = sheetName ?? excel.tables.keys.first;
     final sheet = excel.tables[targetSheetName];
     if (sheet == null) {
-      throw FormatException('Worksheet "$targetSheetName" not found in workbook.');
+      throw FormatException(
+        'Worksheet "$targetSheetName" not found in workbook.',
+      );
     }
     return sheet;
   }
@@ -58,7 +84,9 @@ class ExcelDataSource implements TabularDataSource {
     final cell = data.value!;
     if (cell is TextCellValue) {
       final text = cell.value.text;
-      if (text == null) return '';
+      if (text == null) {
+        return '';
+      }
       return text.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
     } else if (cell is IntCellValue) {
       return cell.value.toString();
@@ -101,7 +129,19 @@ class ExcelDataSource implements TabularDataSource {
     }
 
     final headerRow = sheet.rows.first;
-    return headerRow.map(_cellValueToString).toList();
+    final headers = headerRow.map(_cellValueToString).toList();
+
+    while (headers.isNotEmpty && headers.last.trim().isEmpty) {
+      headers.removeLast();
+    }
+
+    if (headers.isEmpty || headers.every((h) => h.trim().isEmpty)) {
+      throw const FormatException(
+        'Selected worksheet has no valid header row.',
+      );
+    }
+
+    return headers;
   }
 
   @override

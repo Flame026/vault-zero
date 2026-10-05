@@ -1,12 +1,19 @@
+import 'dart:io';
+
+import 'package:excel/excel.dart' hide Border, TextSpan;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:vault_zero/core/database/database_provider.dart';
+import 'package:vault_zero/data/importers/csv_data_source.dart';
+import 'package:vault_zero/data/repositories/sqlite_record_repository.dart';
+import 'package:vault_zero/data/repositories/sqlite_schema_repository.dart';
 import 'package:vault_zero/domain/models/database_definition.dart';
 import 'package:vault_zero/domain/models/field_definition.dart';
-import 'package:vault_zero/data/repositories/sqlite_schema_repository.dart';
+import 'package:vault_zero/domain/models/field_value.dart';
+import 'package:vault_zero/domain/services/import_service.dart';
 import 'package:vault_zero/presentation/records/controllers/record_list_controller.dart';
 import 'package:vault_zero/presentation/records/controllers/v2_export_controller.dart';
 
@@ -16,10 +23,18 @@ void main() {
   late DatabaseDefinition testDb;
   late FieldDefinition nameField;
   late FieldDefinition ageField;
+  late Directory tempDir;
 
   setUpAll(() {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
+    tempDir = Directory.systemTemp.createTempSync('vault_zero_export_test');
+  });
+
+  tearDownAll(() {
+    if (tempDir.existsSync()) {
+      tempDir.deleteSync(recursive: true);
+    }
   });
 
   setUp(() async {
@@ -118,9 +133,7 @@ void main() {
     await repo.createField(ageField);
 
     container = ProviderContainer(
-      overrides: [
-        databaseProvider.overrideWith((ref) => db),
-      ],
+      overrides: [databaseProvider.overrideWith((ref) => db)],
     );
   });
 
@@ -129,43 +142,234 @@ void main() {
     await db.close();
   });
 
-  test('Export generates a valid file when records exist', () async {
-    final recordController = container.read(recordListControllerProvider(testDb.id).notifier);
-    
-    await recordController.saveRecord(
-      fields: [nameField, ageField],
-      rawValues: {
-        nameField.id: 'John',
-        ageField.id: '42',
-      },
-    );
+  test(
+    'Export to Excel with outputDirectory generates valid xlsx file and preserves data',
+    () async {
+      final recordController = container.read(
+        recordListControllerProvider(testDb.id).notifier,
+      );
 
-    final exportController = container.read(v2ExportControllerProvider.notifier);
-    
-    // We expect this to run cleanly and generate a file, but since the test environment
-    // might not have getApplicationDocumentsDirectory available from path_provider,
-    // we just verify it throws MissingPluginException or runs.
-    try {
-      final file = await exportController.exportToExcel(testDb, [nameField, ageField]);
-      if (file != null) {
-        expect(file.existsSync(), true);
-        await file.delete();
-      }
-    } catch (e) {
-      // In a raw dart test, path_provider's getApplicationDocumentsDirectory might throw
-      // MissingPluginException on desktop. We tolerate this just confirming the logic ran.
-      expect(e.toString(), contains('MissingPluginException'));
-    }
-  });
+      await recordController.saveRecord(
+        fields: [nameField, ageField],
+        rawValues: {nameField.id: 'Alice', ageField.id: '30'},
+      );
 
-  test('Export throws when there are no records', () async {
-    final exportController = container.read(v2ExportControllerProvider.notifier);
-    
-    expect(
-      () => exportController.exportToExcel(testDb, [nameField, ageField]),
-      throwsA(isA<StateError>()),
-    );
-  });
+      final exportController = container.read(
+        v2ExportControllerProvider.notifier,
+      );
+
+      final file = await exportController.exportToExcel(testDb, [
+        nameField,
+        ageField,
+      ], outputDirectory: tempDir);
+
+      expect(file, isNotNull);
+      expect(file!.existsSync(), isTrue);
+      expect(file.path, endsWith('.xlsx'));
+      expect(file.path, contains('vault_zero_Test_DB_Export_'));
+
+      final bytes = await file.readAsBytes();
+      final excel = Excel.decodeBytes(bytes);
+      expect(excel.tables.isNotEmpty, isTrue);
+
+      final sheet = excel.tables[excel.tables.keys.first]!;
+      expect(sheet.rows.length, greaterThanOrEqualTo(2)); // header + 1 record
+      expect(sheet.rows[0][0]?.value.toString(), 'Name');
+      expect(sheet.rows[0][1]?.value.toString(), 'Age');
+      expect(sheet.rows[1][0]?.value.toString(), 'Alice');
+      expect(sheet.rows[1][1]?.value.toString(), '30');
+
+      await file.delete();
+    },
+  );
+
+  test(
+    'Export to CSV with outputDirectory generates valid RFC 4180 file with headers and rows',
+    () async {
+      final recordController = container.read(
+        recordListControllerProvider(testDb.id).notifier,
+      );
+
+      await recordController.saveRecord(
+        fields: [nameField, ageField],
+        rawValues: {nameField.id: 'Bob', ageField.id: '25'},
+      );
+
+      final exportController = container.read(
+        v2ExportControllerProvider.notifier,
+      );
+
+      final file = await exportController.exportToCsv(testDb, [
+        nameField,
+        ageField,
+      ], outputDirectory: tempDir);
+
+      expect(file, isNotNull);
+      expect(file!.existsSync(), isTrue);
+      expect(file.path, endsWith('.csv'));
+      expect(file.path, contains('vault_zero_Test_DB_Export_'));
+
+      final content = await file.readAsString();
+      final lines = content.trim().split(RegExp(r'\r?\n'));
+      expect(lines[0], 'Name,Age');
+      expect(lines[1], 'Bob,25');
+
+      await file.delete();
+    },
+  );
+
+  test(
+    'Export to CSV preserves quotes, commas, and newlines per RFC 4180',
+    () async {
+      final recordController = container.read(
+        recordListControllerProvider(testDb.id).notifier,
+      );
+
+      // Record with commas, quotes, and newlines
+      await recordController.saveRecord(
+        fields: [nameField, ageField],
+        rawValues: {
+          nameField.id: 'Smith, "The Agent"\nLine 2',
+          ageField.id: '99',
+        },
+      );
+
+      final exportController = container.read(
+        v2ExportControllerProvider.notifier,
+      );
+
+      final file = await exportController.exportToCsv(testDb, [
+        nameField,
+        ageField,
+      ], outputDirectory: tempDir);
+
+      expect(file, isNotNull);
+      expect(file!.existsSync(), isTrue);
+
+      // Read back using CsvDataSource
+      final source = CsvDataSource(file);
+      final headers = await source.getHeaders();
+      expect(headers, ['Name', 'Age']);
+
+      final rows = await source.getRows().toList();
+      expect(rows.length, 1);
+      expect(rows.first[0], 'Smith, "The Agent"\nLine 2');
+      expect(rows.first[1].toString(), '99');
+
+      await file.delete();
+    },
+  );
+
+  test(
+    'Export to CSV throws StateError when database has no records',
+    () async {
+      final exportController = container.read(
+        v2ExportControllerProvider.notifier,
+      );
+
+      // Database has no records
+      expect(
+        () => exportController.exportToCsv(testDb, [
+          nameField,
+          ageField,
+        ], outputDirectory: tempDir),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
+
+  test(
+    'Export to Excel throws StateError when database has no records',
+    () async {
+      final exportController = container.read(
+        v2ExportControllerProvider.notifier,
+      );
+
+      expect(
+        () => exportController.exportToExcel(testDb, [
+          nameField,
+          ageField,
+        ], outputDirectory: tempDir),
+        throwsA(isA<StateError>()),
+      );
+    },
+  );
+
+  test(
+    'Round-trip: export to CSV then import into new database preserves data',
+    () async {
+      final recordController = container.read(
+        recordListControllerProvider(testDb.id).notifier,
+      );
+
+      await recordController.saveRecord(
+        fields: [nameField, ageField],
+        rawValues: {nameField.id: 'Charlie', ageField.id: '33'},
+      );
+      await recordController.saveRecord(
+        fields: [nameField, ageField],
+        rawValues: {nameField.id: 'Dana', ageField.id: '44'},
+      );
+
+      final exportController = container.read(
+        v2ExportControllerProvider.notifier,
+      );
+
+      final csvFile = await exportController.exportToCsv(testDb, [
+        nameField,
+        ageField,
+      ], outputDirectory: tempDir);
+
+      expect(csvFile, isNotNull);
+
+      // Now import it back using ImportService
+      final schemaRepo = SqliteSchemaRepository(db);
+      final recordRepo = SqliteRecordRepository(db);
+      final importService = ImportService(
+        schemaRepository: schemaRepo,
+        recordRepository: recordRepo,
+      );
+
+      await importService.importDatabase(
+        'Imported DB',
+        CsvDataSource(csvFile!),
+      );
+
+      final databases = await schemaRepo.getAllDatabases();
+      final importedDb = databases.firstWhere((d) => d.name == 'Imported DB');
+
+      expect(importedDb.name, 'Imported DB');
+      expect(importedDb.fields.length, 2);
+      expect(importedDb.fields[0].name, 'Name');
+      expect(importedDb.fields[1].name, 'Age');
+
+      final importedRecords = await recordRepo.getRecordsForDatabase(
+        importedDb.id,
+      );
+      expect(importedRecords.length, 2);
+
+      final nameFieldId = importedDb.fields[0].id;
+      final ageFieldId = importedDb.fields[1].id;
+      expect(
+        (importedRecords[0].values[nameFieldId] as TextFieldValue).value,
+        'Charlie',
+      );
+      expect(
+        (importedRecords[0].values[ageFieldId] as TextFieldValue).value,
+        '33',
+      );
+      expect(
+        (importedRecords[1].values[nameFieldId] as TextFieldValue).value,
+        'Dana',
+      );
+      expect(
+        (importedRecords[1].values[ageFieldId] as TextFieldValue).value,
+        '44',
+      );
+
+      await csvFile.delete();
+    },
+  );
 
   test('exportControllerProvider alias resolves correctly', () {
     final exportController = container.read(exportControllerProvider.notifier);

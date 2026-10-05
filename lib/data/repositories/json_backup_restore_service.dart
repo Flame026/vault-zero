@@ -15,25 +15,43 @@ class JsonBackupRestoreService implements BackupRestoreService {
   @override
   Future<String> exportVault() async {
     // 1. Fetch Databases
-    final dbRows = await _db.query('databases', orderBy: 'created_at ASC, id ASC');
-    final databases = dbRows.map((row) => DatabaseDefinition(
-      id: row['id'] as String,
-      name: row['name'] as String,
-      description: row['description'] as String,
-      fields: const [],
-      createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int, isUtc: true),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int, isUtc: true),
-    )).toList();
+    final dbRows = await _db.query(
+      'databases',
+      orderBy: 'created_at ASC, id ASC',
+    );
+    final databases = dbRows
+        .map(
+          (row) => DatabaseDefinition(
+            id: row['id'] as String,
+            name: row['name'] as String,
+            description: row['description'] as String,
+            fields: const [],
+            createdAt: DateTime.fromMillisecondsSinceEpoch(
+              row['created_at'] as int,
+              isUtc: true,
+            ),
+            updatedAt: DateTime.fromMillisecondsSinceEpoch(
+              row['updated_at'] as int,
+              isUtc: true,
+            ),
+          ),
+        )
+        .toList();
 
     // 2. Fetch Fields
-    final fieldRows = await _db.query('fields', orderBy: 'database_id ASC, position ASC, id ASC');
+    final fieldRows = await _db.query(
+      'fields',
+      orderBy: 'database_id ASC, position ASC, id ASC',
+    );
     final fields = fieldRows.map((row) {
       FieldConfig? config;
       final configStr = row['configuration'] as String?;
       if (configStr != null) {
         final configJson = jsonDecode(configStr) as Map<String, dynamic>;
         if (configJson['type'] == 'choice') {
-          config = ChoiceConfig(options: (configJson['options'] as List).cast<String>());
+          config = ChoiceConfig(
+            options: (configJson['options'] as List).cast<String>(),
+          );
         }
       }
       return FieldDefinition(
@@ -44,19 +62,38 @@ class JsonBackupRestoreService implements BackupRestoreService {
         position: row['position'] as int,
         isRequired: (row['is_required'] as int) == 1,
         configuration: config,
-        createdAt: DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int, isUtc: true),
-        updatedAt: DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int, isUtc: true),
+        createdAt: DateTime.fromMillisecondsSinceEpoch(
+          row['created_at'] as int,
+          isUtc: true,
+        ),
+        updatedAt: DateTime.fromMillisecondsSinceEpoch(
+          row['updated_at'] as int,
+          isUtc: true,
+        ),
       );
     }).toList();
 
     // 3. Fetch Records
-    final recordRows = await _db.query('records', orderBy: 'database_id ASC, created_at ASC, id ASC');
-    final recordsData = recordRows.map((row) => {
-      'id': row['id'] as String,
-      'databaseId': row['database_id'] as String,
-      'createdAt': DateTime.fromMillisecondsSinceEpoch(row['created_at'] as int, isUtc: true),
-      'updatedAt': DateTime.fromMillisecondsSinceEpoch(row['updated_at'] as int, isUtc: true),
-    }).toList();
+    final recordRows = await _db.query(
+      'records',
+      orderBy: 'database_id ASC, created_at ASC, id ASC',
+    );
+    final recordsData = recordRows
+        .map(
+          (row) => {
+            'id': row['id'] as String,
+            'databaseId': row['database_id'] as String,
+            'createdAt': DateTime.fromMillisecondsSinceEpoch(
+              row['created_at'] as int,
+              isUtc: true,
+            ),
+            'updatedAt': DateTime.fromMillisecondsSinceEpoch(
+              row['updated_at'] as int,
+              isUtc: true,
+            ),
+          },
+        )
+        .toList();
 
     // 4. Fetch Field Values
     final valueRows = await _db.query('field_values');
@@ -64,49 +101,99 @@ class JsonBackupRestoreService implements BackupRestoreService {
     for (final row in valueRows) {
       final recordId = row['record_id'] as String;
       final fieldId = row['field_id'] as String;
-      
+
       final fieldDef = fields.where((f) => f.id == fieldId).firstOrNull;
       if (fieldDef == null) continue;
-      
+
       FieldValue? fv;
       final id = row['id'] as String;
       switch (fieldDef.type) {
         case FieldType.text:
-          fv = TextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
+          fv = TextFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: row['text_value'] as String? ?? '',
+          );
           break;
         case FieldType.longText:
-          fv = LongTextFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['text_value'] as String? ?? '');
+          fv = LongTextFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: row['text_value'] as String? ?? '',
+          );
           break;
         case FieldType.integer:
-          fv = IntegerFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['integer_value'] as int? ?? 0);
+          fv = IntegerFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: row['integer_value'] as int? ?? 0,
+          );
           break;
         case FieldType.decimal:
-          fv = DecimalFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['decimal_value'] as num?)?.toDouble() ?? 0.0);
+          fv = DecimalFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: (row['decimal_value'] as num?)?.toDouble() ?? 0.0,
+          );
           break;
         case FieldType.boolean:
-          fv = BooleanFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: (row['boolean_value'] as int?) == 1);
+          fv = BooleanFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: (row['boolean_value'] as int?) == 1,
+          );
           break;
         case FieldType.date:
-          fv = DateFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_value'] as int? ?? 0, isUtc: true));
+          fv = DateFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: DateTime.fromMillisecondsSinceEpoch(
+              row['date_value'] as int? ?? 0,
+              isUtc: true,
+            ),
+          );
           break;
         case FieldType.dateTime:
-          fv = DateTimeFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: DateTime.fromMillisecondsSinceEpoch(row['date_time_value'] as int? ?? 0, isUtc: true));
+          fv = DateTimeFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: DateTime.fromMillisecondsSinceEpoch(
+              row['date_time_value'] as int? ?? 0,
+              isUtc: true,
+            ),
+          );
           break;
         case FieldType.choice:
-          fv = ChoiceFieldValue(id: id, recordId: recordId, fieldId: fieldId, value: row['choice_value'] as String? ?? '');
+          fv = ChoiceFieldValue(
+            id: id,
+            recordId: recordId,
+            fieldId: fieldId,
+            value: row['choice_value'] as String? ?? '',
+          );
           break;
       }
-      
+
       recordValues.putIfAbsent(recordId, () => {})[fieldId] = fv;
     }
 
-    final records = recordsData.map((data) => Record(
-      id: data['id'] as String,
-      databaseId: data['databaseId'] as String,
-      values: recordValues[data['id'] as String] ?? {},
-      createdAt: data['createdAt'] as DateTime,
-      updatedAt: data['updatedAt'] as DateTime,
-    )).toList();
+    final records = recordsData
+        .map(
+          (data) => Record(
+            id: data['id'] as String,
+            databaseId: data['databaseId'] as String,
+            values: recordValues[data['id'] as String] ?? {},
+            createdAt: data['createdAt'] as DateTime,
+            updatedAt: data['updatedAt'] as DateTime,
+          ),
+        )
+        .toList();
 
     final backup = VaultBackup(
       backupFormatVersion: VaultBackup.currentFormatVersion,
@@ -129,7 +216,13 @@ class JsonBackupRestoreService implements BackupRestoreService {
       throw const FormatException('Invalid backup file: Not valid JSON.');
     }
 
-    final backup = VaultBackup.fromJson(jsonMap);
+    final VaultBackup backup;
+    try {
+      backup = VaultBackup.fromJson(jsonMap);
+    } catch (e) {
+      if (e is FormatException) rethrow;
+      throw FormatException('Invalid backup file: $e');
+    }
 
     await _db.transaction((txn) async {
       // Clear database tables
@@ -196,25 +289,29 @@ class JsonBackupRestoreService implements BackupRestoreService {
           switch (value.fieldType) {
             case FieldType.text:
             case FieldType.longText:
-              row['text_value'] = value.value as String;
+              row['text_value'] = value.value?.toString() ?? '';
               break;
             case FieldType.integer:
-              row['integer_value'] = value.value as int;
+              row['integer_value'] = (value.value as num?)?.toInt() ?? 0;
               break;
             case FieldType.decimal:
-              row['decimal_value'] = value.value as double;
+              row['decimal_value'] = (value.value as num?)?.toDouble() ?? 0.0;
               break;
             case FieldType.boolean:
-              row['boolean_value'] = (value.value as bool) ? 1 : 0;
+              row['boolean_value'] = (value.value == true) ? 1 : 0;
               break;
             case FieldType.date:
-              row['date_value'] = (value.value as DateTime).millisecondsSinceEpoch;
+              row['date_value'] = value.value is DateTime
+                  ? (value.value as DateTime).millisecondsSinceEpoch
+                  : (value.value is int ? value.value as int : 0);
               break;
             case FieldType.dateTime:
-              row['date_time_value'] = (value.value as DateTime).millisecondsSinceEpoch;
+              row['date_time_value'] = value.value is DateTime
+                  ? (value.value as DateTime).millisecondsSinceEpoch
+                  : (value.value is int ? value.value as int : 0);
               break;
             case FieldType.choice:
-              row['choice_value'] = value.value as String;
+              row['choice_value'] = value.value?.toString() ?? '';
               break;
           }
           valueBatch.insert('field_values', row);
@@ -223,5 +320,13 @@ class JsonBackupRestoreService implements BackupRestoreService {
       await recordBatch.commit(noResult: true);
       await valueBatch.commit(noResult: true);
     });
+
+    // Reclaim storage space from cleared tables and freelists
+    try {
+      await _db.execute('PRAGMA wal_checkpoint(TRUNCATE)');
+    } catch (_) {}
+    try {
+      await _db.execute('VACUUM');
+    } catch (_) {}
   }
 }

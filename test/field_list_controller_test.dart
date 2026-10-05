@@ -4,8 +4,10 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:uuid/uuid.dart';
 
 import 'package:vault_zero/core/database/database_provider.dart';
+import 'package:vault_zero/core/providers.dart';
 import 'package:vault_zero/domain/models/database_definition.dart';
 import 'package:vault_zero/domain/models/field_definition.dart';
+import 'package:vault_zero/domain/repositories/schema_repository.dart';
 import 'package:vault_zero/data/repositories/sqlite_schema_repository.dart';
 import 'package:vault_zero/presentation/fields/controllers/field_list_controller.dart';
 
@@ -66,9 +68,7 @@ void main() {
     );
 
     container = ProviderContainer(
-      overrides: [
-        databaseProvider.overrideWith((ref) => db),
-      ],
+      overrides: [databaseProvider.overrideWith((ref) => db)],
     );
   });
 
@@ -78,12 +78,16 @@ void main() {
   });
 
   test('Field list loads successfully (empty initially)', () async {
-    final state = await container.read(fieldListControllerProvider(testDbId).future);
+    final state = await container.read(
+      fieldListControllerProvider(testDbId).future,
+    );
     expect(state, isEmpty);
   });
 
   test('Field creation works and enforces position', () async {
-    final controller = container.read(fieldListControllerProvider(testDbId).notifier);
+    final controller = container.read(
+      fieldListControllerProvider(testDbId).notifier,
+    );
     await container.read(fieldListControllerProvider(testDbId).future);
 
     await controller.createField(
@@ -92,7 +96,9 @@ void main() {
       isRequired: true,
     );
 
-    var state = await container.read(fieldListControllerProvider(testDbId).future);
+    var state = await container.read(
+      fieldListControllerProvider(testDbId).future,
+    );
     expect(state.length, 1);
     expect(state.first.name, 'Field 1');
     expect(state.first.position, 0);
@@ -110,32 +116,91 @@ void main() {
   });
 
   test('Field uniqueness validation', () async {
-    final controller = container.read(fieldListControllerProvider(testDbId).notifier);
+    final controller = container.read(
+      fieldListControllerProvider(testDbId).notifier,
+    );
     await container.read(fieldListControllerProvider(testDbId).future);
 
-    await controller.createField(name: 'Duplicate Me', type: FieldType.text, isRequired: false);
+    await controller.createField(
+      name: 'Duplicate Me',
+      type: FieldType.text,
+      isRequired: false,
+    );
 
     expect(controller.isNameUnique('Duplicate Me'), false);
-    expect(controller.isNameUnique('duplicate me '), false); // Checks case insensitivity and trim
+    expect(
+      controller.isNameUnique('duplicate me '),
+      false,
+    ); // Checks case insensitivity and trim
     expect(controller.isNameUnique('New Field'), true);
+
+    // Controller defensively throws ArgumentError on duplicate or empty names
+    expect(
+      () => controller.createField(
+        name: 'duplicate me',
+        type: FieldType.text,
+        isRequired: false,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+    expect(
+      () => controller.createField(
+        name: '   ',
+        type: FieldType.text,
+        isRequired: false,
+      ),
+      throwsA(isA<ArgumentError>()),
+    );
+
+    final fields = await container.read(
+      fieldListControllerProvider(testDbId).future,
+    );
+    expect(
+      () => controller.updateField(fields.first, name: '', isRequired: false),
+      throwsA(isA<ArgumentError>()),
+    );
   });
 
   test('Field reordering works comprehensively', () async {
-    final controller = container.read(fieldListControllerProvider(testDbId).notifier);
+    final controller = container.read(
+      fieldListControllerProvider(testDbId).notifier,
+    );
     await container.read(fieldListControllerProvider(testDbId).future);
 
-    await controller.createField(name: 'A', type: FieldType.text, isRequired: false);
-    await controller.createField(name: 'B', type: FieldType.text, isRequired: false);
-    await controller.createField(name: 'C', type: FieldType.text, isRequired: false);
-    await controller.createField(name: 'D', type: FieldType.text, isRequired: false);
-    await controller.createField(name: 'E', type: FieldType.text, isRequired: false);
+    await controller.createField(
+      name: 'A',
+      type: FieldType.text,
+      isRequired: false,
+    );
+    await controller.createField(
+      name: 'B',
+      type: FieldType.text,
+      isRequired: false,
+    );
+    await controller.createField(
+      name: 'C',
+      type: FieldType.text,
+      isRequired: false,
+    );
+    await controller.createField(
+      name: 'D',
+      type: FieldType.text,
+      isRequired: false,
+    );
+    await controller.createField(
+      name: 'E',
+      type: FieldType.text,
+      isRequired: false,
+    );
 
     // Initial: A=0, B=1, C=2, D=3, E=4
 
     // 1. Moving an item downward: Move B(1) below C(2). ReorderableListView gives newIndex=3
     await controller.reorderFields(1, 3);
     await Future.delayed(Duration.zero);
-    var state = await container.read(fieldListControllerProvider(testDbId).future);
+    var state = await container.read(
+      fieldListControllerProvider(testDbId).future,
+    );
     expect(state.map((e) => e.name).toList(), ['A', 'C', 'B', 'D', 'E']);
     for (int i = 0; i < state.length; i++) {
       expect(state[i].position, i);
@@ -168,4 +233,146 @@ void main() {
       expect(state[i].position, i);
     }
   });
+
+  test(
+    'Field moveField directly moves item to exact index with boundary safety',
+    () async {
+      final controller = container.read(
+        fieldListControllerProvider(testDbId).notifier,
+      );
+      await container.read(fieldListControllerProvider(testDbId).future);
+
+      await controller.createField(
+        name: 'Alpha',
+        type: FieldType.text,
+        isRequired: false,
+      );
+      await controller.createField(
+        name: 'Beta',
+        type: FieldType.text,
+        isRequired: false,
+      );
+      await controller.createField(
+        name: 'Gamma',
+        type: FieldType.text,
+        isRequired: false,
+      );
+
+      // Direct move: move Alpha (0) to index 2 (end)
+      await controller.moveField(0, 2);
+      await Future.delayed(Duration.zero);
+      var state = await container.read(
+        fieldListControllerProvider(testDbId).future,
+      );
+      expect(state.map((e) => e.name).toList(), ['Beta', 'Gamma', 'Alpha']);
+      for (int i = 0; i < state.length; i++) {
+        expect(state[i].position, i);
+      }
+
+      // Out-of-bounds move is ignored safely
+      await controller.moveField(-1, 2);
+      await controller.moveField(0, 99);
+      state = await container.read(
+        fieldListControllerProvider(testDbId).future,
+      );
+      expect(state.map((e) => e.name).toList(), ['Beta', 'Gamma', 'Alpha']);
+    },
+  );
+
+  test(
+    'Field mutations propagate errors and update state to AsyncError on failure',
+    () async {
+      final failingContainer = ProviderContainer(
+        overrides: [
+          schemaRepositoryProvider.overrideWith(
+            (ref) async => _FailingSchemaRepository(),
+          ),
+        ],
+      );
+      addTearDown(failingContainer.dispose);
+
+      final controller = failingContainer.read(
+        fieldListControllerProvider(testDbId).notifier,
+      );
+
+      // Create failure
+      expect(
+        () => controller.createField(
+          name: 'Fail Field',
+          type: FieldType.text,
+          isRequired: false,
+        ),
+        throwsA(isA<Exception>()),
+      );
+
+      // Update failure
+      final dummyField = FieldDefinition(
+        id: 'f-1',
+        databaseId: testDbId,
+        name: 'Field 1',
+        type: FieldType.text,
+        position: 0,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+      expect(
+        () => controller.updateField(
+          dummyField,
+          name: 'Renamed',
+          isRequired: false,
+        ),
+        throwsA(isA<Exception>()),
+      );
+
+      // Delete failure
+      expect(() => controller.deleteField('f-1'), throwsA(isA<Exception>()));
+    },
+  );
+}
+
+class _FailingSchemaRepository implements SchemaRepository {
+  @override
+  Future<void> createDatabase(DatabaseDefinition database) async {
+    throw Exception('Simulated DB create failure');
+  }
+
+  @override
+  Future<void> updateDatabase(DatabaseDefinition database) async {
+    throw Exception('Simulated DB update failure');
+  }
+
+  @override
+  Future<void> deleteDatabase(String id) async {
+    throw Exception('Simulated DB delete failure');
+  }
+
+  @override
+  Future<DatabaseDefinition?> getDatabase(String id) async => null;
+
+  @override
+  Future<List<DatabaseDefinition>> getAllDatabases() async => [];
+
+  @override
+  Future<void> createField(FieldDefinition field) async {
+    throw Exception('Simulated field create failure');
+  }
+
+  @override
+  Future<void> updateField(FieldDefinition field) async {
+    throw Exception('Simulated field update failure');
+  }
+
+  @override
+  Future<void> updateFields(List<FieldDefinition> fields) async {
+    throw Exception('Simulated fields update failure');
+  }
+
+  @override
+  Future<void> deleteField(String id) async {
+    throw Exception('Simulated field delete failure');
+  }
+
+  @override
+  Future<List<FieldDefinition>> getFieldsForDatabase(String databaseId) async =>
+      [];
 }

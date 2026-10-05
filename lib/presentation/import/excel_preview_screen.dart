@@ -5,7 +5,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path/path.dart' as p;
 
 import '../../core/providers.dart';
+import '../../core/theme/design_tokens.dart';
 import '../../data/importers/excel_data_source.dart';
+import '../common/widgets/vault_app_bar.dart';
+import '../common/widgets/vault_card.dart';
+import '../common/widgets/vault_error_view.dart';
+import '../common/widgets/vault_icon_badge.dart';
+import '../common/widgets/vault_snackbar.dart';
+import '../common/error_sanitizer.dart';
 import '../databases/controllers/database_list_controller.dart';
 
 class ExcelPreviewScreen extends ConsumerStatefulWidget {
@@ -18,9 +25,11 @@ class ExcelPreviewScreen extends ConsumerStatefulWidget {
 }
 
 class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
+  final _formKey = GlobalKey<FormState>();
   bool _isLoading = true;
   bool _isImporting = false;
   String? _error;
+  int? _fileSizeBytes;
   List<String> _sheetNames = [];
   String? _selectedSheet;
   List<String> _headers = [];
@@ -41,6 +50,12 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
     super.dispose();
   }
 
+  String _formatFileSize(int bytes) {
+    if (bytes < 1024) return '$bytes B';
+    if (bytes < 1024 * 1024) return '${(bytes / 1024).toStringAsFixed(1)} KB';
+    return '${(bytes / (1024 * 1024)).toStringAsFixed(1)} MB';
+  }
+
   Future<void> _initializeWorkbook() async {
     setState(() {
       _isLoading = true;
@@ -48,7 +63,12 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
     });
 
     try {
-      final source = ExcelDataSource(File(widget.filePath));
+      final file = File(widget.filePath);
+      if (await file.exists()) {
+        _fileSizeBytes = await file.length();
+      }
+
+      final source = ExcelDataSource(file);
       final sheets = await source.getSheetNames();
 
       if (sheets.isEmpty) {
@@ -70,7 +90,7 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to read Excel workbook: $e';
+          _error = sanitizeErrorMessage(e);
           _isLoading = false;
         });
       }
@@ -84,7 +104,10 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
     });
 
     try {
-      final source = ExcelDataSource(File(widget.filePath), sheetName: sheetName);
+      final source = ExcelDataSource(
+        File(widget.filePath),
+        sheetName: sheetName,
+      );
       final headers = await source.getHeaders();
       final rows = await source.getRows().take(5).toList();
 
@@ -98,7 +121,7 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
     } catch (e) {
       if (mounted) {
         setState(() {
-          _error = 'Failed to read worksheet preview: $e';
+          _error = sanitizeErrorMessage(e);
           _isLoading = false;
         });
       }
@@ -118,18 +141,18 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
   }
 
   Future<void> _handleImport() async {
+    if (_formKey.currentState != null && !_formKey.currentState!.validate()) {
+      return;
+    }
+
     final dbName = _nameController.text.trim();
     if (dbName.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Database name cannot be empty.')),
-      );
+      VaultSnackbar.showError(context, 'Database name cannot be empty');
       return;
     }
 
     if (_selectedSheet == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please select a worksheet to import.')),
-      );
+      VaultSnackbar.showError(context, 'Please select a worksheet to import.');
       return;
     }
 
@@ -139,7 +162,10 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
 
     try {
       final importService = await ref.read(importServiceProvider.future);
-      final source = ExcelDataSource(File(widget.filePath), sheetName: _selectedSheet);
+      final source = ExcelDataSource(
+        File(widget.filePath),
+        sheetName: _selectedSheet,
+      );
 
       await importService.importDatabase(dbName, source);
 
@@ -149,25 +175,38 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
       ref.invalidate(databaseListControllerProvider);
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Excel imported successfully!')),
-        );
+        VaultSnackbar.showSuccess(context, 'Excel imported successfully!');
         Navigator.of(context).popUntil((route) => route.isFirst);
       }
     } catch (e) {
       if (mounted) {
         showDialog(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Import Failed'),
-            content: Text(e.toString()),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(),
-                child: const Text('OK'),
+          builder: (dialogContext) {
+            final colorScheme = Theme.of(dialogContext).colorScheme;
+            return AlertDialog(
+              backgroundColor: colorScheme.surfaceContainerLow,
+              shape: RoundedRectangleBorder(
+                borderRadius: AppRadius.radiusDialog,
               ),
-            ],
-          ),
+              icon: Icon(
+                Icons.error_outline_rounded,
+                size: 32,
+                color: colorScheme.error,
+              ),
+              title: const Text('Import Failed'),
+              content: Text(
+                sanitizeErrorMessage(e),
+                style: Theme.of(dialogContext).textTheme.bodyMedium,
+              ),
+              actions: [
+                FilledButton(
+                  onPressed: () => Navigator.of(dialogContext).pop(),
+                  child: const Text('OK'),
+                ),
+              ],
+            );
+          },
         );
       }
     } finally {
@@ -184,97 +223,168 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
     final theme = Theme.of(context);
     final colorScheme = theme.colorScheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Preview Excel Import'),
-      ),
-      body: Stack(
-        children: [
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator())
-          else if (_error != null)
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(24.0),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      _error!,
-                      style: TextStyle(color: colorScheme.error),
-                      textAlign: TextAlign.center,
-                    ),
-                    if (_sheetNames.length > 1) ...[
-                      const SizedBox(height: 16),
-                      DropdownButton<String>(
-                        value: _selectedSheet,
-                        items: _sheetNames.map((sheet) {
-                          return DropdownMenuItem(
-                            value: sheet,
-                            child: Text(sheet),
-                          );
-                        }).toList(),
-                        onChanged: _onSheetChanged,
-                      ),
-                    ],
-                  ],
+    return PopScope(
+      canPop: !_isImporting,
+      child: Scaffold(
+        appBar: const VaultAppBar(
+          title: 'Preview Excel Import',
+          subtitle: 'Review Sheets & Columns',
+        ),
+        body: Stack(
+          children: [
+            if (_isLoading)
+              const Center(
+                child: SizedBox(
+                  width: 32,
+                  height: 32,
+                  child: CircularProgressIndicator(strokeWidth: 3),
                 ),
-              ),
-            )
-          else
-            Align(
-              alignment: Alignment.topCenter,
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxWidth: 720),
-                child: Column(
-                  children: [
-                    Expanded(
-                      child: ListView(
-                        padding: const EdgeInsets.all(24.0),
-                        children: [
-                          Card(
-                            elevation: 0,
-                            color: colorScheme.surfaceContainerLow,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            child: Padding(
-                              padding: const EdgeInsets.all(16.0),
+              )
+            else if (_error != null)
+              VaultErrorView(
+                title: 'Could not load Excel',
+                message: _error!,
+                onRetry: _initializeWorkbook,
+              )
+            else
+              Align(
+                alignment: Alignment.topCenter,
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 720),
+                  child: Column(
+                    children: [
+                      Expanded(
+                        child: ListView(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          children: [
+                            // Source File Card
+                            VaultCard(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
                               child: Row(
                                 children: [
-                                  Container(
-                                    padding: const EdgeInsets.all(10),
-                                    decoration: BoxDecoration(
-                                      color: colorScheme.primaryContainer,
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Icon(
-                                      Icons.description_rounded,
-                                      color: colorScheme.onPrimaryContainer,
-                                      size: 24,
-                                    ),
+                                  VaultIconBadge(
+                                    icon: Icons.table_view_rounded,
+                                    iconColor: colorScheme.primary,
+                                    backgroundColor: colorScheme
+                                        .primaryContainer
+                                        .withValues(alpha: 0.6),
                                   ),
-                                  const SizedBox(width: 16),
+                                  const SizedBox(width: AppSpacing.lg),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Text(
-                                          'Source File',
-                                          style: theme.textTheme.labelMedium?.copyWith(
-                                            color: colorScheme.onSurfaceVariant,
-                                          ),
+                                          'SOURCE FILE',
+                                          style: theme.textTheme.labelSmall
+                                              ?.copyWith(
+                                                color: colorScheme
+                                                    .onSurfaceVariant,
+                                                letterSpacing: 0.8,
+                                                fontWeight: FontWeight.w600,
+                                              ),
                                         ),
+                                        const SizedBox(height: AppSpacing.xxs),
                                         Text(
                                           p.basename(widget.filePath),
-                                          style: theme.textTheme.titleMedium?.copyWith(
-                                            fontWeight: FontWeight.bold,
-                                          ),
+                                          style: theme.textTheme.titleMedium
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w600,
+                                                color: colorScheme.onSurface,
+                                              ),
                                           maxLines: 1,
                                           overflow: TextOverflow.ellipsis,
+                                        ),
+                                        const SizedBox(height: AppSpacing.xs),
+                                        Row(
+                                          children: [
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: AppSpacing.sm,
+                                                    vertical: AppSpacing.xxs,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: colorScheme
+                                                    .surfaceContainer,
+                                                borderRadius:
+                                                    AppRadius.radiusSm,
+                                              ),
+                                              child: Text(
+                                                '${_sheetNames.length} ${_sheetNames.length == 1 ? 'sheet' : 'sheets'}',
+                                                style: theme
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ),
+                                            const SizedBox(
+                                              width: AppSpacing.sm,
+                                            ),
+                                            Container(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: AppSpacing.sm,
+                                                    vertical: AppSpacing.xxs,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: colorScheme
+                                                    .surfaceContainer,
+                                                borderRadius:
+                                                    AppRadius.radiusSm,
+                                              ),
+                                              child: Text(
+                                                '${_headers.length} ${_headers.length == 1 ? 'column' : 'columns'}',
+                                                style: theme
+                                                    .textTheme
+                                                    .labelSmall
+                                                    ?.copyWith(
+                                                      color: colorScheme
+                                                          .onSurfaceVariant,
+                                                      fontWeight:
+                                                          FontWeight.w600,
+                                                    ),
+                                              ),
+                                            ),
+                                            if (_fileSizeBytes != null) ...[
+                                              const SizedBox(
+                                                width: AppSpacing.sm,
+                                              ),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: AppSpacing.sm,
+                                                      vertical: AppSpacing.xxs,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: colorScheme
+                                                      .surfaceContainer,
+                                                  borderRadius:
+                                                      AppRadius.radiusSm,
+                                                ),
+                                                child: Text(
+                                                  _formatFileSize(
+                                                    _fileSizeBytes!,
+                                                  ),
+                                                  style: theme
+                                                      .textTheme
+                                                      .labelSmall
+                                                      ?.copyWith(
+                                                        color: colorScheme
+                                                            .onSurfaceVariant,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                ),
+                                              ),
+                                            ],
+                                          ],
                                         ),
                                       ],
                                     ),
@@ -282,142 +392,269 @@ class _ExcelPreviewScreenState extends ConsumerState<ExcelPreviewScreen> {
                                 ],
                               ),
                             ),
-                          ),
-                          if (_sheetNames.length > 1) ...[
-                            const SizedBox(height: 16),
-                            DropdownButtonFormField<String>(
-                              value: _selectedSheet,
-                              decoration: const InputDecoration(
-                                labelText: 'Select Worksheet',
-                                border: OutlineInputBorder(),
-                              ),
-                              items: _sheetNames.map((sheet) {
-                                return DropdownMenuItem(
-                                  value: sheet,
-                                  child: Text(sheet),
-                                );
-                              }).toList(),
-                              onChanged: _onSheetChanged,
-                            ),
-                          ] else if (_sheetNames.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Text(
-                              'Worksheet: ${_sheetNames.first}',
-                              style: theme.textTheme.bodyMedium?.copyWith(
-                                color: colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 16),
-                          TextField(
-                            controller: _nameController,
-                            decoration: const InputDecoration(
-                              labelText: 'Target Database Name',
-                              border: OutlineInputBorder(),
-                            ),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Detected Headers (${_headers.length}):',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: _headers
-                                .map((h) => Chip(
-                                      label: Text(h),
-                                      shape: RoundedRectangleBorder(
-                                        borderRadius: BorderRadius.circular(10),
-                                      ),
-                                    ))
-                                .toList(),
-                          ),
-                          const SizedBox(height: 24),
-                          Text(
-                            'Sample Data (First ${_sampleRows.length} rows):',
-                            style: theme.textTheme.titleSmall?.copyWith(
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Card(
-                            elevation: 0,
-                            color: colorScheme.surfaceContainerLow,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              side: BorderSide(
-                                color: colorScheme.outlineVariant.withValues(alpha: 0.5),
-                              ),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: DataTable(
-                                columns: _headers
-                                    .map((h) => DataColumn(
-                                          label: Text(
-                                            h,
-                                            style: const TextStyle(fontWeight: FontWeight.bold),
-                                          ),
-                                        ))
-                                    .toList(),
-                                rows: _sampleRows.map((row) {
-                                  return DataRow(
-                                    cells: List.generate(_headers.length, (index) {
-                                      final cellText = index < row.length ? row[index].toString() : '';
-                                      return DataCell(Text(
-                                        cellText.length > 30 ? '${cellText.substring(0, 27)}...' : cellText,
-                                      ));
-                                    }),
+                            if (_sheetNames.length > 1) ...[
+                              const SizedBox(height: AppSpacing.lg),
+                              DropdownButtonFormField<String>(
+                                initialValue: _selectedSheet,
+                                decoration: const InputDecoration(
+                                  labelText: 'Select Worksheet',
+                                  prefixIcon: Icon(Icons.tab_rounded, size: 20),
+                                ),
+                                borderRadius: AppRadius.radiusMd,
+                                items: _sheetNames.map((sheet) {
+                                  return DropdownMenuItem(
+                                    value: sheet,
+                                    child: Text(sheet),
                                   );
                                 }).toList(),
+                                onChanged: _onSheetChanged,
                               ),
+                            ],
+                            const SizedBox(height: AppSpacing.lg),
+                            // Target database name with validation
+                            Form(
+                              key: _formKey,
+                              autovalidateMode:
+                                  AutovalidateMode.onUserInteraction,
+                              child: TextFormField(
+                                controller: _nameController,
+                                decoration: const InputDecoration(
+                                  labelText: 'Target Database Name',
+                                  hintText: 'Enter database name',
+                                  prefixIcon: Icon(
+                                    Icons.storage_rounded,
+                                    size: 20,
+                                  ),
+                                ),
+                                validator: (value) {
+                                  final trimmed = value?.trim() ?? '';
+                                  if (trimmed.isEmpty) {
+                                    return 'Database name cannot be empty';
+                                  }
+                                  if (trimmed.length > 60) {
+                                    return 'Database name cannot exceed 60 characters';
+                                  }
+                                  return null;
+                                },
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xxl),
+                            // Detected Headers
+                            Text(
+                              'Detected Headers (${_headers.length}):',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            Wrap(
+                              spacing: AppSpacing.sm,
+                              runSpacing: AppSpacing.sm,
+                              children: _headers
+                                  .asMap()
+                                  .entries
+                                  .map(
+                                    (e) => Chip(
+                                      avatar: CircleAvatar(
+                                        backgroundColor:
+                                            colorScheme.primaryContainer,
+                                        radius: 10,
+                                        child: Text(
+                                          '${e.key + 1}',
+                                          style: TextStyle(
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                            color:
+                                                colorScheme.onPrimaryContainer,
+                                          ),
+                                        ),
+                                      ),
+                                      label: Text(e.value),
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: AppRadius.radiusSm,
+                                      ),
+                                    ),
+                                  )
+                                  .toList(),
+                            ),
+                            const SizedBox(height: AppSpacing.xxl),
+                            // Sample Data Table
+                            Text(
+                              'Sample Data (First ${_sampleRows.length} rows):',
+                              style: theme.textTheme.titleSmall?.copyWith(
+                                fontWeight: FontWeight.w600,
+                                color: colorScheme.onSurface,
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.sm),
+                            if (_sampleRows.isEmpty)
+                              VaultCard(
+                                padding: const EdgeInsets.all(AppSpacing.xl),
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.info_outline_rounded,
+                                      color: colorScheme.primary,
+                                      size: 20,
+                                    ),
+                                    const SizedBox(width: AppSpacing.md),
+                                    Expanded(
+                                      child: Text(
+                                        'This worksheet contains headers but no record rows.',
+                                        style: theme.textTheme.bodyMedium
+                                            ?.copyWith(
+                                              color:
+                                                  colorScheme.onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            else
+                              VaultCard(
+                                padding: EdgeInsets.zero,
+                                child: SingleChildScrollView(
+                                  scrollDirection: Axis.horizontal,
+                                  child: DataTable(
+                                    headingRowColor: WidgetStateProperty.all(
+                                      colorScheme.surfaceContainerHigh
+                                          .withValues(alpha: 0.5),
+                                    ),
+                                    columns: _headers
+                                        .map(
+                                          (h) => DataColumn(
+                                            label: Text(
+                                              h,
+                                              style: const TextStyle(
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        )
+                                        .toList(),
+                                    rows: _sampleRows.map((row) {
+                                      return DataRow(
+                                        cells: List.generate(_headers.length, (
+                                          index,
+                                        ) {
+                                          final cellText = index < row.length
+                                              ? row[index]?.toString() ?? ''
+                                              : '';
+                                          return DataCell(
+                                            cellText.trim().isEmpty
+                                                ? Text(
+                                                    '(empty)',
+                                                    style: theme
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          fontStyle:
+                                                              FontStyle.italic,
+                                                          color: colorScheme
+                                                              .outline,
+                                                        ),
+                                                  )
+                                                : Text(
+                                                    cellText.length > 30
+                                                        ? '${cellText.substring(0, 27)}...'
+                                                        : cellText,
+                                                  ),
+                                          );
+                                        }),
+                                      );
+                                    }).toList(),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      SafeArea(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(
+                            horizontal: AppSpacing.lg,
+                            vertical:
+                                MediaQuery.sizeOf(context).height <
+                                    AppBreakpoints.shortHeight
+                                ? AppSpacing.sm
+                                : AppSpacing.lg,
+                          ),
+                          child: SizedBox(
+                            width: double.infinity,
+                            child: FilledButton.icon(
+                              onPressed: _isImporting ? null : _handleImport,
+                              icon: _isImporting
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(
+                                      Icons.download_rounded,
+                                      size: 20,
+                                    ),
+                              label: Text(
+                                _isImporting
+                                    ? 'Importing...'
+                                    : 'Import Database',
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            if (_isImporting)
+              Container(
+                color: Colors.black54,
+                child: Center(
+                  child: Card(
+                    elevation: 0,
+                    color: colorScheme.surfaceContainerLow,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: AppRadius.radiusDialog,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: AppSpacing.xxxl,
+                        vertical: AppSpacing.xxl,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const SizedBox(
+                            width: 32,
+                            height: 32,
+                            child: CircularProgressIndicator(strokeWidth: 3),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            'Importing Database...',
+                            style: theme.textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.xs),
+                          Text(
+                            'Writing records safely to offline storage',
+                            style: theme.textTheme.bodySmall?.copyWith(
+                              color: colorScheme.onSurfaceVariant,
                             ),
                           ),
                         ],
                       ),
                     ),
-                    SafeArea(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: SizedBox(
-                          width: double.infinity,
-                          child: FilledButton.icon(
-                            onPressed: _isImporting ? null : _handleImport,
-                            icon: const Icon(Icons.download_rounded),
-                            label: const Text('Import Database'),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          if (_isImporting)
-            Container(
-              color: Colors.black54,
-              child: const Center(
-                child: Card(
-                  child: Padding(
-                    padding: EdgeInsets.all(32.0),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        CircularProgressIndicator(),
-                        SizedBox(height: 16),
-                        Text('Importing Database...'),
-                      ],
-                    ),
                   ),
                 ),
               ),
-            ),
-        ],
+          ],
+        ),
       ),
     );
   }
